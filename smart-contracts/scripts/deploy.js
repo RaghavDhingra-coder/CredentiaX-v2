@@ -1,23 +1,22 @@
-const { ethers } = require('hardhat')
+const hre = require('hardhat')
 
 async function main() {
-  const [deployer] = await ethers.getSigners()
-  console.log('Deploying contracts with account:', deployer.address)
+  const [deployer] = await hre.ethers.getSigners()
+  console.log('Deploying with:', deployer.address)
 
-  const balance = await ethers.provider.getBalance(deployer.address)
-  console.log('Account balance:', ethers.formatEther(balance), 'ETH')
+  const Factory = await hre.ethers.getContractFactory('CredentialRegistry')
+  const contract = await Factory.deploy()
+  await contract.waitForDeployment()
 
-  const CredentialRegistry = await ethers.getContractFactory('CredentialRegistry')
-  const registry = await CredentialRegistry.deploy()
-  await registry.waitForDeployment()
-
-  const address = await registry.getAddress()
+  const address = await contract.getAddress()
   console.log('CredentialRegistry deployed to:', address)
+  console.log('')
+  console.log('Add to backend/.env:')
+  console.log('CONTRACT_ADDRESS=' + address)
+  console.log('')
+  console.log('Add to frontend/.env:')
+  console.log('VITE_CONTRACT_ADDRESS=' + address)
+  console.log('VITE_CHAIN_ID=31337')
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error)
-    process.exit(1)
-  })
+main().catch((err) => { console.error(err); process.exit(1) })

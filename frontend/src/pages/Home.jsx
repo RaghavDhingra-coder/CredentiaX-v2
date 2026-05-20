@@ -1,5 +1,17 @@
 import { Link } from 'react-router-dom'
 
+/* ─── shared wrapper ─────────────────────────────────────── */
+/* max-w-6xl = 72 rem = 1152 px.  On a 1280-px laptop this
+   gives ~64 px of breathing room each side before padding. */
+function Container({ children, className = '' }) {
+  return (
+    <div className={`w-full max-w-6xl mx-auto px-5 sm:px-8 lg:px-12 ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+/* ─── data ───────────────────────────────────────────────── */
 const features = [
   {
     icon: (
@@ -39,101 +51,146 @@ const features = [
   },
 ]
 
+const stats = [
+  { value: '100%', label: 'Tamper-Proof' },
+  { value: '< 1s',  label: 'Verification Time' },
+  { value: '∞',     label: 'Scalable Network' },
+  { value: '0',     label: 'Central Authority' },
+]
+
+/* ─── page ───────────────────────────────────────────────── */
 export default function Home() {
   return (
-    <div className="flex flex-col">
-      {/* Hero */}
-      <section className="relative flex flex-col items-center justify-center px-6 py-28 text-center overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.15),transparent)]" />
-        <div className="relative max-w-4xl mx-auto">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            Powered by Blockchain Technology
-          </span>
-          <h1 className="text-5xl sm:text-6xl font-bold text-white leading-tight tracking-tight mb-6">
+    <div className="flex flex-col w-full">
+
+      {/* ══ Hero ══════════════════════════════════════════ */}
+      {/* Gradient lives on the section element itself —
+          no absolutely-positioned child that could overflow. */}
+      <section
+        className="w-full overflow-hidden"
+        style={{
+          background:
+            'radial-gradient(ellipse 100% 55% at 50% 0%, rgba(99,102,241,0.18) 0%, transparent 65%)',
+        }}
+      >
+        <Container className="py-16 sm:py-24 lg:py-32 text-center">
+          {/* Badge */}
+          <div className="flex justify-center mb-6 sm:mb-8">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+              Powered by Blockchain Technology
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold text-white leading-tight tracking-tight mb-5 sm:mb-6">
             Decentralized Credential
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-sky-400">
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-sky-400 mt-1 sm:mt-2">
               Verification Network
             </span>
           </h1>
-          <p className="text-lg text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Issue, manage, and verify digital credentials on a trustless blockchain network.
-            Put identity control back in the hands of individuals.
+
+          {/* Subheading */}
+          <p className="text-base sm:text-lg text-slate-400 max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed">
+            Issue, manage, and verify digital credentials on a trustless blockchain
+            network. Put identity control back in the hands of individuals.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+
+          {/* Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <Link
               to="/login"
-              className="px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5"
+              className="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/25 hover:-translate-y-0.5 duration-200 text-center"
             >
               Get Started
             </Link>
             <Link
               to="/dashboard"
-              className="px-8 py-3.5 rounded-xl border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white font-semibold transition-all hover:-translate-y-0.5"
+              className="w-full sm:w-auto px-7 py-3.5 rounded-xl border border-slate-600 hover:border-slate-400 text-slate-300 hover:text-white font-semibold text-sm transition-all hover:-translate-y-0.5 duration-200 text-center"
             >
               View Dashboard
             </Link>
           </div>
-        </div>
+        </Container>
       </section>
 
-      {/* Stats */}
-      <section className="border-y border-slate-800 bg-slate-900/50">
-        <div className="max-w-5xl mx-auto px-6 py-12 grid grid-cols-2 sm:grid-cols-4 gap-8 text-center">
-          {[
-            { value: '100%', label: 'Tamper-Proof' },
-            { value: '< 1s', label: 'Verification Time' },
-            { value: '∞', label: 'Scalable Network' },
-            { value: '0', label: 'Central Authority' },
-          ].map(({ value, label }) => (
-            <div key={label}>
-              <div className="text-3xl font-bold text-white mb-1">{value}</div>
-              <div className="text-sm text-slate-400">{label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="max-w-6xl mx-auto px-6 py-24">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl font-bold text-white mb-4">Built for Trust at Scale</h2>
-          <p className="text-slate-400 max-w-xl mx-auto">
-            Every component of CredentiaX is designed with security, privacy, and interoperability at its core.
-          </p>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {features.map(({ icon, title, description }) => (
-            <div
-              key={title}
-              className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 hover:bg-slate-900/80 transition-all group"
-            >
-              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 transition-colors">
-                {icon}
+      {/* ══ Stats strip ═══════════════════════════════════ */}
+      <section className="w-full border-y border-slate-800 bg-slate-900/60">
+        <Container className="py-10 sm:py-12">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-8 text-center">
+            {stats.map(({ value, label }) => (
+              <div key={label}>
+                <p className="text-2xl sm:text-3xl font-bold text-white mb-1">{value}</p>
+                <p className="text-xs sm:text-sm text-slate-400">{label}</p>
               </div>
-              <h3 className="font-semibold text-white mb-2">{title}</h3>
-              <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Container>
       </section>
 
-      {/* CTA */}
-      <section className="max-w-4xl mx-auto px-6 pb-24">
-        <div className="relative rounded-3xl bg-gradient-to-br from-indigo-600 to-sky-600 p-12 text-center overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.1),transparent)]" />
-          <h2 className="relative text-3xl font-bold text-white mb-4">Ready to take control of your identity?</h2>
-          <p className="relative text-indigo-100 mb-8 max-w-lg mx-auto">
-            Join the decentralized credential network and experience truly sovereign digital identity.
-          </p>
-          <Link
-            to="/login"
-            className="relative inline-flex px-8 py-3.5 rounded-xl bg-white text-indigo-600 font-semibold hover:bg-indigo-50 transition-colors shadow-lg"
-          >
-            Create Your Identity
-          </Link>
-        </div>
+      {/* ══ Features ══════════════════════════════════════ */}
+      <section className="w-full">
+        <Container className="py-16 sm:py-20 lg:py-24">
+          {/* Section header */}
+          <div className="text-center mb-10 sm:mb-14">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">
+              Built for Trust at Scale
+            </h2>
+            <p className="text-slate-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
+              Every component of CredentiaX is designed with security, privacy, and
+              interoperability at its core.
+            </p>
+          </div>
+
+          {/* Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            {features.map(({ icon, title, description }) => (
+              <div
+                key={title}
+                className="flex flex-col p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-700/60 hover:border-indigo-500/50 hover:bg-slate-800/70 transition-all duration-200 group"
+              >
+                <div className="w-11 h-11 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 mb-4 group-hover:bg-indigo-500/20 transition-colors shrink-0">
+                  {icon}
+                </div>
+                <h3 className="font-semibold text-white text-sm sm:text-base mb-2">{title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+        </Container>
       </section>
+
+      {/* ══ CTA banner ════════════════════════════════════ */}
+      <section className="w-full">
+        <Container className="pb-16 sm:pb-20 lg:pb-24">
+          {/* Card — max-w-4xl keeps it well inside the Container */}
+          <div className="max-w-4xl mx-auto rounded-2xl sm:rounded-3xl overflow-hidden"
+               style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #0ea5e9 100%)' }}>
+            <div
+              className="px-8 py-12 sm:px-12 sm:py-16 text-center"
+              style={{
+                background:
+                  'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,255,255,0.12) 0%, transparent 70%)',
+              }}
+            >
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white mb-3 sm:mb-4 leading-snug">
+                Ready to take control of your identity?
+              </h2>
+              <p className="text-indigo-100 text-sm sm:text-base mb-7 sm:mb-8 max-w-md mx-auto leading-relaxed">
+                Join the decentralized credential network and experience truly sovereign
+                digital identity.
+              </p>
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center px-7 py-3.5 rounded-xl bg-white text-indigo-600 font-semibold text-sm hover:bg-indigo-50 transition-all shadow-lg hover:-translate-y-0.5 duration-200"
+              >
+                Create Your Identity
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </section>
+
     </div>
   )
 }

@@ -1,0 +1,113 @@
+// ─── Prisma Schema — CredentiaX ────────────────────────────────────────────
+// Database: Neon PostgreSQL (serverless)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────
+
+enum Role {
+  HOLDER
+  UNIVERSITY
+  ADMIN
+  VERIFIER
+}
+
+enum VerificationStatus {
+  VALID
+  INVALID
+  REVOKED
+  NOT_FOUND
+}
+
+enum CertificateStatus {
+  PENDING_BLOCKCHAIN
+  ACTIVE
+  FAILED
+}
+
+// ─── Models ────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          Role     @default(HOLDER)
+  walletAddress String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Self-referential: UNIVERSITY user → HOLDER users they created
+  createdByUniversityId String?
+  createdByUniversity   User?  @relation("UniversityHolders", fields: [createdByUniversityId], references: [id])
+  createdHolders        User[] @relation("UniversityHolders")
+
+  // Certificates this holder received
+  certificates     Certificate[] @relation("HolderCertificates")
+  // Certificates this university issued
+  issuedCertificates Certificate[] @relation("UniversityCertificates")
+
+  @@map("users")
+}
+
+model University {
+  id             String   @id @default(cuid())
+  universityName String
+  universityCode String   @unique
+  walletAddress  String?  @unique
+  isVerified     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("universities")
+}
+
+model Certificate {
+  id                  String   @id @default(cuid())
+  certificateId       String   @unique
+  title               String
+  course              String
+  description         String?
+  issueDate           DateTime
+  pdfHash             String?
+  pdfPath             String?
+  blockchainTxHash    String?
+  issuerWalletAddress String?
+  isRevoked           Boolean           @default(false)
+  status              CertificateStatus @default(ACTIVE)
+  chainId             Int?
+  blockNumber         Int?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // The HOLDER who received this certificate
+  holderId  String
+  holder    User   @relation("HolderCertificates", fields: [holderId], references: [id], onDelete: Restrict)
+
+  // The UNIVERSITY user who issued this certificate
+  issuedByUserId String
+  issuedByUser   User   @relation("UniversityCertificates", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+
+  verificationLogs VerificationLog[]
+
+  @@map("certificates")
+}
+
+model VerificationLog {
+  id                 String             @id @default(cuid())
+  verifierIp         String
+  verificationStatus VerificationStatus
+  createdAt          DateTime           @default(now())
+
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@map("verification_logs")
+}

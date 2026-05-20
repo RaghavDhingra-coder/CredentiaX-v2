@@ -1,63 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/**
- * @title CredentialRegistry
- * @notice On-chain registry for issuing and verifying decentralized credentials.
- */
 contract CredentialRegistry {
-    struct Credential {
-        bytes32 credentialHash;
-        address issuer;
-        address subject;
-        uint256 issuedAt;
-        uint256 expiresAt;
-        bool revoked;
-    }
+    // Flat primitive mappings — no structs, no dynamic arrays
+    mapping(bytes32 => bytes32)  public credHash;
+    mapping(bytes32 => address)  public credIssuer;
+    mapping(bytes32 => uint256)  public credIssuedAt;
+    mapping(bytes32 => uint256)  public credExpiresAt;
+    mapping(bytes32 => bool)     public credRevoked;
 
-    // credentialId => Credential
-    mapping(bytes32 => Credential) private credentials;
-    // subject address => list of credentialIds
-    mapping(address => bytes32[]) private subjectCredentials;
-
-    // Authorized issuers
-    mapping(address => bool) public authorizedIssuers;
     address public owner;
 
-    event CredentialIssued(
-        bytes32 indexed credentialId,
-        address indexed issuer,
-        address indexed subject,
-        uint256 issuedAt,
-        uint256 expiresAt
-    );
+    event CredentialIssued(bytes32 indexed credentialId, address indexed issuer, uint256 issuedAt);
     event CredentialRevoked(bytes32 indexed credentialId, address indexed revokedBy);
-    event IssuerAuthorized(address indexed issuer);
-    event IssuerRevoked(address indexed issuer);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
     }
 
-    modifier onlyAuthorizedIssuer() {
-        require(authorizedIssuers[msg.sender], "Not an authorized issuer");
-        _;
-    }
-
     constructor() {
         owner = msg.sender;
-        authorizedIssuers[msg.sender] = true;
-    }
-
-    function authorizeIssuer(address issuer) external onlyOwner {
-        authorizedIssuers[issuer] = true;
-        emit IssuerAuthorized(issuer);
-    }
-
-    function revokeIssuer(address issuer) external onlyOwner {
-        authorizedIssuers[issuer] = false;
-        emit IssuerRevoked(issuer);
     }
 
     function issueCredential(
@@ -65,54 +28,36 @@ contract CredentialRegistry {
         bytes32 credentialHash,
         address subject,
         uint256 expiresAt
-    ) external onlyAuthorizedIssuer {
-        require(credentials[credentialId].issuedAt == 0, "Credential already exists");
-        require(subject != address(0), "Invalid subject address");
-        require(expiresAt > block.timestamp, "Expiry must be in the future");
+    ) external {
+        require(credIssuedAt[credentialId] == 0, "Already exists");
+        require(expiresAt > block.timestamp, "Expiry in past");
 
-        credentials[credentialId] = Credential({
-            credentialHash: credentialHash,
-            issuer: msg.sender,
-            subject: subject,
-            issuedAt: block.timestamp,
-            expiresAt: expiresAt,
-            revoked: false
-        });
+        credHash[credentialId]     = credentialHash;
+        credIssuer[credentialId]   = msg.sender;
+        credIssuedAt[credentialId] = block.timestamp;
+        credExpiresAt[credentialId] = expiresAt;
+        credRevoked[credentialId]  = false;
 
-        subjectCredentials[subject].push(credentialId);
-
-        emit CredentialIssued(credentialId, msg.sender, subject, block.timestamp, expiresAt);
+        emit CredentialIssued(credentialId, msg.sender, block.timestamp);
     }
 
     function revokeCredential(bytes32 credentialId) external {
-        Credential storage cred = credentials[credentialId];
-        require(cred.issuedAt != 0, "Credential does not exist");
+        require(credIssuedAt[credentialId] != 0, "Does not exist");
         require(
-            msg.sender == cred.issuer || msg.sender == owner,
-            "Not authorized to revoke"
+            msg.sender == credIssuer[credentialId] || msg.sender == owner,
+            "Not authorized"
         );
-        require(!cred.revoked, "Already revoked");
+        require(!credRevoked[credentialId], "Already revoked");
 
-        cred.revoked = true;
+        credRevoked[credentialId] = true;
         emit CredentialRevoked(credentialId, msg.sender);
     }
 
-    function verifyCredential(bytes32 credentialId) external view returns (bool valid, string memory reason) {
-        Credential storage cred = credentials[credentialId];
-
-        if (cred.issuedAt == 0) return (false, "Credential does not exist");
-        if (cred.revoked) return (false, "Credential has been revoked");
-        if (block.timestamp > cred.expiresAt) return (false, "Credential has expired");
-
-        return (true, "Valid");
-    }
-
-    function getCredential(bytes32 credentialId) external view returns (Credential memory) {
-        require(credentials[credentialId].issuedAt != 0, "Credential does not exist");
-        return credentials[credentialId];
-    }
-
-    function getSubjectCredentials(address subject) external view returns (bytes32[] memory) {
-        return subjectCredentials[subject];
+    // Returns (valid, statusCode): statusCode 0=valid 1=notFound 2=revoked 3=expired
+    function verifyCredential(bytes32 credentialId) external view returns (bool valid, uint8 statusCode) {
+        if (credIssuedAt[credentialId] == 0)          return (false, 1);
+        if (credRevoked[credentialId])                return (false, 2);
+        if (block.timestamp > credExpiresAt[credentialId]) return (false, 3);
+        return (true, 0);
     }
 }

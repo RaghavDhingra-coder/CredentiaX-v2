@@ -1,0 +1,14 @@
+IMMEDIATE ACTION REQUIRED:
+
+The frontend dev server MUST be restarted for the Vite proxy to work.
+
+1. Stop the frontend dev server (Ctrl+C in the terminal running it)
+2. Start it again: npm run dev
+3. The proxy will now forward /api requests to localhost:3001
+4. Try issuing a certificate again
+
+The backend is running correctly. The routes are registered. The issue is just that the Vite proxy needs a restart.
+
+After restart, you'll see proxy logs like:
+[PROXY] Sending Request: POST /api/v1/certificates/issue → /api/v1/certificates/issue
+[PROXY] Received Response: POST /api/v1/certificates/issue → 201
