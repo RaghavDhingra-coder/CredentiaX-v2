@@ -1,0 +1,21 @@
+{
+  "name": "credentiax-smart-contracts",
+  "version": "1.0.0",
+  "description": "CredentiaX Solidity Smart Contracts",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "clean": "hardhat clean"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "dotenv": "^17.4.2",
+    "hardhat": "^2.22.0"
+  }
+}
