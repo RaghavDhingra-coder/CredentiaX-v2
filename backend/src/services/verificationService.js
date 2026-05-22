@@ -40,12 +40,14 @@ async function safeLog(certDbId, ip, status) {
   }
 }
 
-// Core fields used for tamper detection. holder/issuedBy/date excluded — extraction
-// is still inconsistent across screenshots and PDFs.
+// The six fields compared between QR/registry data and extracted certificate text.
 const COMPARE_FIELDS = [
-  { key: 'certId', label: 'Certificate ID' },
-  { key: 'title',  label: 'Title'          },
-  { key: 'course', label: 'Course'         },
+  { key: 'certId',   label: 'Certificate ID' },
+  { key: 'title',    label: 'Title'           },
+  { key: 'course',   label: 'Course'          },
+  { key: 'holder',   label: 'Holder'          },
+  { key: 'issuedBy', label: 'Issued By'       },
+  { key: 'date',     label: 'Issue Date'      },
 ]
 
 // Collapse all whitespace (spaces, tabs, newlines, carriage returns) and lowercase.

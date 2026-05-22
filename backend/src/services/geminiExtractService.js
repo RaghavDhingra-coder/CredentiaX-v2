@@ -1,7 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { PDFParse, VerbosityLevel } from 'pdf-parse'
-import { fromBuffer } from 'pdf2pic'
-import os from 'os'
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
 
@@ -36,25 +34,19 @@ Return exactly this structure:
 // Used when processing an image: Gemini Vision reads the image and also decodes the QR.
 const IMAGE_PROMPT = `Extract the following fields from this certificate image and return ONLY valid JSON.
 
-CRITICAL — IGNORE completely:
-- Browser UI: tabs, address bar, bookmarks bar, browser buttons, scroll bars
-- Window title bar, OS taskbar, desktop icons
-- WhatsApp UI, messaging app headers, chat bubbles, contact names
-- Any text outside the actual certificate document itself
-Only read text that is part of the printed certificate document.
-
 Fields:
 - certificateId: Certificate number/ID visible on the certificate (e.g. CERT-2026-000019). Look near a label like "CERTIFICATE ID".
 - title: The degree or program title printed AFTER the course name (e.g. "be ise", "be cse"). Do NOT use "Certificate of Completion".
 - course: The course/branch/department abbreviation in bold (e.g. "ise", "cse", "aiml"). Appears after "has successfully completed".
-- holder: The full name of the student or candidate who received the certificate. Appears after "This is to certify that".
-- issuedBy: The institution or university name in the certificate header — the large bold text at the very top of the certificate document. Never "Certificate of Completion". Never a browser tab title or window title.
+- holder: The full name of the student or candidate who received the certificate.
+- issuedBy: The name of the institution or university in the header (e.g. "ABCD", "MIT"). Never "Certificate of Completion".
 - issueDate: The issue date as printed (e.g. "May 22, 2026"). Look near the label "ISSUED ON".
 - qrUrl: Decode the QR code printed on the certificate (usually bottom-right) and report the full URL or text it encodes. This may contain a DIFFERENT certificate ID than what is visible in the text — report exactly what the QR encodes. Set to null if no QR code found.
 
 Rules:
-- issuedBy MUST come from the certificate header — never from browser tabs, window titles, or surrounding UI.
-- Preserve exact visible values from the certificate.
+- Read ALL visible text carefully.
+- Preserve exact visible values.
+- issuedBy = institution name in the header, never decorative "Certificate of Completion" text.
 - Use null (JSON null, not the string "null") for missing fields.
 - Return ONLY raw JSON — no markdown, no explanation.
 
@@ -122,21 +114,7 @@ async function callGemini(content) {
   return extractJSON(raw)
 }
 
-// ── PDF → image conversion ────────────────────────────────────────────────────
-
-async function pdfToImageBuffer(pdfBuffer) {
-  const convert = fromBuffer(pdfBuffer, {
-    density:      200,
-    format:       'jpeg',
-    savePath:     os.tmpdir(),
-    saveFilename: 'cert-' + Date.now(),
-  })
-  const result = await convert(1, { responseType: 'base64' })
-  if (!result?.base64) throw new Error('pdf2pic: no image data returned')
-  return Buffer.from(result.base64, 'base64')
-}
-
-// ── PDF path: extract text → Gemini text task (fallback) ─────────────────────
+// ── PDF path: extract text → Gemini text task ─────────────────────────────────
 
 async function extractFromPDF(buffer) {
   // Step 1: get raw text from PDF using pdf-parse
@@ -175,25 +153,16 @@ async function extractFromImage(buffer, mimetype) {
 
 /**
  * Extract the 6 comparison fields from a certificate buffer.
- * PDFs: pdf2pic → JPEG → Gemini Vision (same path as images; fallback: pdf-parse text task)
- * Images: Gemini Vision (includes QR URL decode)
+ * PDFs: pdf-parse → Gemini text task  (reliable; QR decode not available)
+ * Images: Gemini Vision                (includes QR URL decode)
  *
  * Returns { certId, title, course, holder, issuedBy, date, qrUrl }
  */
 export async function geminiExtractFields(buffer, mimetype) {
-  const mt    = (mimetype || '').toLowerCase()
+  const mt  = (mimetype || '').toLowerCase()
+  const ext = mt  // already lowercased mimetype
   const isPDF = mt === 'application/pdf'
 
-  if (isPDF) {
-    try {
-      const imageBuffer = await pdfToImageBuffer(buffer)
-      console.log('[geminiExtract/pdf] converted PDF to JPEG (%d bytes)', imageBuffer.length)
-      return extractFromImage(imageBuffer, 'image/jpeg')
-    } catch (err) {
-      console.warn('[geminiExtract/pdf] pdf2pic failed, falling back to text extraction:', err.message)
-      return extractFromPDF(buffer)
-    }
-  }
-
+  if (isPDF) return extractFromPDF(buffer)
   return extractFromImage(buffer, mt || 'image/png')
 }
