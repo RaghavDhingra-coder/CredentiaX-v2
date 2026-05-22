@@ -2,7 +2,7 @@ import prisma from '../config/prisma.js'
 import { extractFromFile, scanQRFromBuffer, parseCertIdFromQR } from './extractService.js'
 import { geminiExtractFields } from './geminiExtractService.js'
 import { verificationLogService } from './verificationLogService.js'
-import { formatIssueDate, normalize } from '../utils/certMetadata.js'
+import { normalize } from '../utils/certMetadata.js'
 
 const CERT_SELECT = {
   id:                  true,
@@ -49,7 +49,6 @@ const COMPARE_FIELDS = [
   { key: 'usn',      label: 'USN'             },
   { key: 'cgpa',     label: 'CGPA / Marks'   },
   { key: 'issuedBy', label: 'Issued By'       },
-  { key: 'date',     label: 'Issue Date'      },
 ]
 
 // Collapse all whitespace (spaces, tabs, newlines, carriage returns) and lowercase.
@@ -191,7 +190,6 @@ export const verificationService = {
       usn:      cert.usn                || null,
       cgpa:     cert.cgpa != null ? String(cert.cgpa) : null,
       issuedBy: cert.issuedByUser?.name || null,
-      date:     cert.issueDate ? formatIssueDate(cert.issueDate) : null,
     }
 
     // ── Step 5: Build extracted data (from Gemini AI extraction) ─────────────
@@ -203,7 +201,6 @@ export const verificationService = {
       usn:      textFields.usn      || null,
       cgpa:     textFields.cgpa     || null,
       issuedBy: textFields.issuedBy || null,
-      date:     textFields.date     || null,
     }
 
     // ── Step 6: Field-by-field comparison ─────────────────────────────────────
