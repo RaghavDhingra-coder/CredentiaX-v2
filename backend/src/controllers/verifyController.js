@@ -14,6 +14,7 @@ export const verifyController = {
     try {
       const result = await verificationService.verifyByUpload({
         buffer:       req.file.buffer,
+        mimetype:     req.file.mimetype,
         originalName: req.file.originalname,
         manualCertId: req.body.certificateId || null,
         ip:           getIp(req),

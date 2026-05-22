@@ -8,7 +8,7 @@ import { generateQRBuffer } from '../utils/qr.js'
 import { generateCertificatePDF } from '../utils/pdf.js'
 import { blockchainService } from './blockchainService.js'
 import { config } from '../config/env.js'
-import { encodeId, encodeHash, farFutureExpiry } from '../utils/blockchainPayload.js'
+import { encodeId, encodeHash, farFutureExpiry, computeMetadataHashes } from '../utils/blockchainPayload.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_DIR = join(__dirname, '../../uploads/certificates')
@@ -29,6 +29,8 @@ const CERT_SELECT_FULL = {
   title: true,
   course: true,
   description: true,
+  usn: true,
+  cgpa: true,
   issueDate: true,
   pdfHash: true,
   pdfPath: true,
@@ -43,61 +45,66 @@ const CERT_SELECT_FULL = {
   issuedByUser: { select: { id: true, name: true, email: true, walletAddress: true } },
 }
 
-// Alias kept for existing callers
 const CERT_SELECT = CERT_SELECT_FULL
 
 export const certificateService = {
-  async issueCertificate({ holderId, issuedByUserId, title, course, description, issueDate }) {
+  async issueCertificate({ holderId, issuedByUserId, title, course, usn, cgpa, description, issueDate }) {
     await ensureUploadsDir()
 
-    // 1. Verify holder belongs to this university
     const holder = await prisma.user.findUnique({ where: { id: holderId } })
     if (!holder || holder.role !== 'HOLDER') throw new AppError('Holder not found', 404)
     if (holder.createdByUniversityId !== issuedByUserId) {
       throw new AppError('This holder belongs to a different institution', 403)
     }
 
-    // 2. Get issuing university user
     const issuer = await prisma.user.findUnique({ where: { id: issuedByUserId } })
     if (!issuer) throw new AppError('Issuer not found', 404)
 
-    // 3. Generate unique certificate ID
     const certId = await nextCertificateId()
 
-    // 4. Generate QR code pointing to verification URL
-    const appUrl = config.appUrl.replace(/\/+$/, '')
+    const appUrl    = config.appUrl.replace(/\/+$/, '')
     const verifyUrl = `${appUrl}/verify/${certId}`
-    const qrBuffer = await generateQRBuffer(verifyUrl)
+    const qrBuffer  = await generateQRBuffer(verifyUrl)
 
-    // 5. Generate PDF (with QR embedded)
     const pdfBuffer = await generateCertificatePDF({
-      universityName:     issuer.name,
-      holderName:         holder.name,
+      universityName:      issuer.name,
+      holderName:          holder.name,
       title,
       course,
-      description:        description || null,
-      issueDate:          new Date(issueDate),
-      certificateId:      certId,
+      usn:                 usn || null,
+      cgpa:                cgpa || null,
+      description:         description || null,
+      issueDate:           new Date(issueDate),
+      certificateId:       certId,
       issuerWalletAddress: issuer.walletAddress || null,
       qrBuffer,
     })
 
-    // 6. SHA-256 hash of the complete PDF binary
     const pdfHash = sha256(pdfBuffer)
 
-    // 7. Save PDF to disk
     const fileName = `${certId}.pdf`
     const fullPath = join(UPLOADS_DIR, fileName)
     await writeFile(fullPath, pdfBuffer)
     const pdfPath = `uploads/certificates/${fileName}`
 
-    // 8. Issue on blockchain (non-blocking — fails gracefully if unconfigured)
     let blockchainTxHash = null
     if (blockchainService.isConfigured() && holder.walletAddress) {
       try {
+        const { nameHash, usnHash, courseHash, gradeHash, dateHash } = computeMetadataHashes({
+          name:      holder.name,
+          usn:       usn || '',
+          course,
+          cgpa:      cgpa || '',
+          issueDate: new Date(issueDate),
+        })
         const result = await blockchainService.issueCredentialOnChain({
           credentialId:    certId,
           credentialHash:  `0x${pdfHash.slice(0, 62)}`,
+          nameHash,
+          usnHash,
+          courseHash,
+          gradeHash,
+          dateHash,
           subjectAddress:  holder.walletAddress,
           expiresAt:       null,
         })
@@ -107,12 +114,13 @@ export const certificateService = {
       }
     }
 
-    // 9. Persist to database
     const certificate = await prisma.certificate.create({
       data: {
         certificateId:       certId,
         title,
         course,
+        usn:                 usn || null,
+        cgpa:                cgpa || null,
         description:         description || null,
         issueDate:           new Date(issueDate),
         pdfHash,
@@ -129,7 +137,6 @@ export const certificateService = {
     return { certificate, pdfBuffer, certId }
   },
 
-  // Certificates visible to a HOLDER (their own)
   async findByHolder(holderId) {
     return prisma.certificate.findMany({
       where:   { holderId },
@@ -138,7 +145,6 @@ export const certificateService = {
     })
   },
 
-  // Certificates issued by a UNIVERSITY user
   async findByIssuer(issuedByUserId) {
     return prisma.certificate.findMany({
       where:   { issuedByUserId },
@@ -147,7 +153,6 @@ export const certificateService = {
     })
   },
 
-  // Public lookup by certificateId (for verification page)
   async findByCertificateId(certificateId) {
     const cert = await prisma.certificate.findUnique({
       where:  { certificateId },
@@ -184,7 +189,7 @@ export const certificateService = {
   },
 
   // ── Phase-1: generate PDF/hash, persist as PENDING_BLOCKCHAIN ──────────────
-  async prepareCertificate({ holderId, issuedByUserId, title, course, description, issueDate }) {
+  async prepareCertificate({ holderId, issuedByUserId, title, course, usn, cgpa, description, issueDate }) {
     await ensureUploadsDir()
 
     const holder = await prisma.user.findUnique({ where: { id: holderId } })
@@ -207,6 +212,8 @@ export const certificateService = {
       holderName:          holder.name,
       title,
       course,
+      usn:                 usn || null,
+      cgpa:                cgpa || null,
       description:         description || null,
       issueDate:           new Date(issueDate),
       certificateId:       certId,
@@ -223,11 +230,22 @@ export const certificateService = {
 
     const expiresAt = farFutureExpiry()
 
+    // Compute metadata hashes for on-chain storage
+    const { nameHash, usnHash, courseHash, gradeHash, dateHash } = computeMetadataHashes({
+      name:      holder.name,
+      usn:       usn || '',
+      course,
+      cgpa:      cgpa || '',
+      issueDate: new Date(issueDate),
+    })
+
     const certificate = await prisma.certificate.create({
       data: {
         certificateId:       certId,
         title,
         course,
+        usn:                 usn || null,
+        cgpa:                cgpa || null,
         description:         description || null,
         issueDate:           new Date(issueDate),
         pdfHash,
@@ -246,6 +264,11 @@ export const certificateService = {
       blockchainPayload: {
         credentialIdBytes32:   encodeId(certId),
         credentialHashBytes32: encodeHash(pdfHash),
+        nameHash,
+        usnHash,
+        courseHash,
+        gradeHash,
+        dateHash,
         subjectAddress:        holder.walletAddress || '0x0000000000000000000000000000000000000000',
         expiresAt,
         contractAddress:       config.blockchain.contractAddress || '',
@@ -260,7 +283,6 @@ export const certificateService = {
     if (!cert) throw new AppError('Certificate not found', 404)
     if (cert.status === 'ACTIVE') throw new AppError('Certificate already finalized', 409)
 
-    // Optional on-chain verification when blockchain is configured
     if (blockchainService.isConfigured()) {
       try {
         const onChain = await blockchainService.verifyCredentialOnChain(certificateId)
@@ -269,7 +291,6 @@ export const certificateService = {
         }
       } catch (err) {
         if (err instanceof AppError) throw err
-        // RPC unavailable — trust frontend tx hash in dev
         console.warn('[finalize] on-chain check skipped:', err.message)
       }
     }
@@ -280,7 +301,7 @@ export const certificateService = {
         status:              'ACTIVE',
         blockchainTxHash:    txHash,
         issuerWalletAddress: signerAddress || cert.issuerWalletAddress,
-        chainId:             chainId   ? Number(chainId)   : null,
+        chainId:             chainId    ? Number(chainId)    : null,
         blockNumber:         blockNumber ? Number(blockNumber) : null,
       },
       select: CERT_SELECT,

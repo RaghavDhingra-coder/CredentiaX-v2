@@ -75,6 +75,8 @@ model Certificate {
   title               String
   course              String
   description         String?
+  usn                 String?
+  cgpa                String?
   issueDate           DateTime
   pdfHash             String?
   pdfPath             String?

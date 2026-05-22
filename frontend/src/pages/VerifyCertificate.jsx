@@ -97,26 +97,42 @@ function chainLabel(chainId) {
   return `Chain ${id}`
 }
 
-// ─── Hash Diff visualiser ─────────────────────────────────────────────────────
+// ─── Field comparison row (QR/Registry vs Extracted Text) ────────────────────
 
-function HashDiff({ label, hash, reference, colorClass = 'text-slate-400' }) {
-  if (!hash) return null
+function FieldComparisonRow({ field }) {
+  const { label, qrValue, extractedValue, matched } = field
+  const isMismatch = matched === false
+  const isMatch    = matched === true
+
+  const rowCls = isMismatch
+    ? 'border-red-500/20 bg-red-500/5'
+    : isMatch
+    ? 'border-emerald-500/15 bg-emerald-500/5'
+    : 'border-slate-700/40 bg-slate-800/20'
+
+  const statusLabel = isMismatch ? '✗ Mismatch' : isMatch ? '✓ Match' : '— Inconclusive'
+  const statusColor = isMismatch ? 'text-red-400' : isMatch ? 'text-emerald-400' : 'text-slate-600'
+
   return (
-    <div>
-      <p className="text-xs font-medium text-slate-500 mb-1.5">{label}</p>
-      <p className="font-mono text-[11px] leading-relaxed break-all select-all bg-slate-800/60 border border-slate-700/60 rounded-lg px-3 py-2.5">
-        {hash.split('').map((ch, i) => {
-          const mismatch = reference && ch !== reference[i]
-          return (
-            <span
-              key={i}
-              className={mismatch ? 'text-red-400 bg-red-500/25 rounded-sm' : colorClass}
-            >
-              {ch}
-            </span>
-          )
-        })}
-      </p>
+    <div className={`rounded-lg border px-3 py-2.5 ${rowCls}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-slate-400">{label}</span>
+        <span className={`text-[10px] font-semibold ${statusColor}`}>{statusLabel}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <p className="text-[10px] text-slate-600 mb-0.5">QR / Registry</p>
+          <p className={`text-xs font-mono break-all ${isMismatch ? 'text-red-300' : isMatch ? 'text-emerald-300' : 'text-slate-400'}`}>
+            {qrValue ?? <span className="text-slate-600 italic">—</span>}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-slate-600 mb-0.5">Certificate Text</p>
+          <p className={`text-xs font-mono break-all ${isMismatch ? 'text-red-300' : isMatch ? 'text-emerald-300' : 'text-slate-500 italic'}`}>
+            {extractedValue ?? <span className="text-slate-600 italic">—</span>}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
@@ -147,7 +163,7 @@ const STATUS_CONFIG = {
     dot:       'bg-emerald-400',
     Icon:      ShieldCheckIcon,
     title:     'Credential Verified',
-    subtitle:  'This credential is authentic and has not been tampered with.',
+    subtitle:  'QR registry data and extracted certificate content match across all fields.',
   },
   TAMPERED: {
     border:    'border-red-500/30',
@@ -161,7 +177,7 @@ const STATUS_CONFIG = {
     dot:       'bg-red-400',
     Icon:      ShieldExclamationIcon,
     title:     'Certificate Tampered',
-    subtitle:  'The uploaded PDF does not match the original issued certificate.',
+    subtitle:  'One or more fields differ between the QR registry data and certificate content.',
   },
   REVOKED: {
     border:    'border-amber-500/30',
@@ -297,41 +313,64 @@ function ResultCard({ result, mode, onReset }) {
         </div>
       )}
 
-      {/* Hash comparison (upload mode only) */}
-      {mode === 'upload' && (result.uploadedHash || result.storedHash) && (
+      {/* Field comparison panel (upload mode only) */}
+      {mode === 'upload' && result.fieldResults && result.fieldResults.length > 0 && (
         <div className="px-5 py-4 border-t border-slate-800 flex flex-col gap-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-            SHA-256 Hash Comparison
-          </p>
-
-          <HashDiff
-            label="Uploaded PDF Hash"
-            hash={result.uploadedHash}
-            reference={result.storedHash}
-            colorClass={result.hashMatch ? 'text-emerald-400' : 'text-red-400'}
-          />
-
-          {result.storedHash && (
-            <HashDiff
-              label="Original Issued Hash (stored)"
-              hash={result.storedHash}
-              reference={result.uploadedHash}
-              colorClass={result.hashMatch ? 'text-emerald-400' : 'text-slate-400'}
-            />
-          )}
-
-          {result.hashMatch ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
-              <ShieldCheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-              <p className="text-emerald-400 text-xs font-medium">Hashes match — document is authentic</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+              Field Comparison
+            </p>
+            <div className="flex items-center gap-1.5">
+              {result.qrFound && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-medium">
+                  QR detected
+                </span>
+              )}
+              {result.extractionMethod && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-500">
+                  {result.extractionMethod === 'gemini'
+                    ? 'Gemini AI'
+                    : result.extractionMethod === 'pdf-parse'
+                    ? 'PDF text'
+                    : 'OCR'}
+                </span>
+              )}
             </div>
-          ) : (
+          </div>
+
+          {/* Column headers */}
+          <div className="grid grid-cols-2 gap-2 px-3">
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              QR / Registry Data
+            </p>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              Certificate Text
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            {result.fieldResults.map((f) => <FieldComparisonRow key={f.key} field={f} />)}
+          </div>
+
+          {result.anyMismatch ? (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/8 border border-red-500/20">
               <ShieldExclamationIcon className="w-4 h-4 text-red-400 shrink-0" />
               <p className="text-red-400 text-xs font-medium">
-                Hash mismatch — {result.status === 'TAMPERED'
-                  ? 'the uploaded PDF has been modified after issuance'
-                  : 'the uploaded PDF does not match any known certificate'}
+                Field mismatch detected — certificate content does not match QR registry data
+              </p>
+            </div>
+          ) : result.anyInconclusive ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/8 border border-amber-500/20">
+              <ShieldExclamationIcon className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-amber-400 text-xs font-medium">
+                Some fields could not be extracted — review manually for complete assurance
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
+              <ShieldCheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+              <p className="text-emerald-400 text-xs font-medium">
+                All fields match — certificate is authentic
               </p>
             </div>
           )}
@@ -378,7 +417,7 @@ function DropZone({ file, isDragging, onDrop, onDragOver, onDragLeave, onFileCha
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
         className="sr-only"
         onChange={onFileChange}
       />
@@ -416,10 +455,10 @@ function DropZone({ file, isDragging, onDrop, onDragOver, onDragLeave, onFileCha
             </div>
             <div>
               <p className="text-sm font-medium text-slate-300">
-                Drop a PDF here, or{' '}
+                Drop a file here, or{' '}
                 <span className="text-indigo-400 hover:text-indigo-300 transition-colors">browse</span>
               </p>
-              <p className="text-xs text-slate-500 mt-1">PDF files only · Maximum 10 MB</p>
+              <p className="text-xs text-slate-500 mt-1">PDF, PNG, JPG, WEBP · Max 15 MB</p>
             </div>
           </>
         )}
@@ -500,17 +539,21 @@ export default function VerifyCertificate() {
     e.preventDefault()
     setIsDragging(false)
   }
+  const ACCEPTED_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp'])
+  const ACCEPTED_EXTS  = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp'])
+
   function onDrop(e) {
     e.preventDefault()
     setIsDragging(false)
     const f = e.dataTransfer.files[0]
     if (!f) return
-    if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
-      toast.error('Please drop a PDF file')
+    const ext = f.name.toLowerCase().split('.').pop()
+    if (!ACCEPTED_TYPES.has(f.type) && !ACCEPTED_EXTS.has(ext)) {
+      toast.error('Please drop a PDF or image file (PNG, JPG, WEBP)')
       return
     }
-    if (f.size > 10 * 1024 * 1024) {
-      toast.error('File is too large. Maximum size is 10 MB.')
+    if (f.size > 15 * 1024 * 1024) {
+      toast.error('File is too large. Maximum size is 15 MB.')
       return
     }
     setFile(f)
@@ -585,7 +628,8 @@ export default function VerifyCertificate() {
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Credential Verification</h1>
         <p className="text-slate-400 text-sm">
           Verify the authenticity of credentials issued on the CredentiaX network.
-          Detect tampering by comparing PDF hashes with the original stored hash.
+          Upload any format — PDF, screenshot, or photo — and we compare the actual
+          content fields against the blockchain-stored record.
         </p>
       </div>
 
@@ -660,10 +704,11 @@ export default function VerifyCertificate() {
         {activeTab === 'upload' && (
           <div className="flex flex-col gap-4">
             <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5">
-              <h2 className="text-sm font-semibold text-white mb-1">PDF Tamper Detection</h2>
+              <h2 className="text-sm font-semibold text-white mb-1">Certificate Integrity Verification</h2>
               <p className="text-xs text-slate-500 mb-4">
-                Upload the PDF certificate. We hash it locally and compare against the original
-                hash recorded at issuance time.
+                Upload the certificate as a PDF or image (PNG, JPG, screenshot). We scan the embedded
+                QR code to look up the authoritative registry record, then compare 6 key fields against
+                what is actually printed on the certificate. Any mismatch flags tampering.
               </p>
 
               <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4">
@@ -682,7 +727,7 @@ export default function VerifyCertificate() {
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
                     Certificate ID{' '}
-                    <span className="text-slate-600 font-normal">(optional — helps identify tampered documents)</span>
+                    <span className="text-slate-600 font-normal">(optional — auto-detected from QR code or file text)</span>
                   </label>
                   <input
                     type="text"
@@ -704,19 +749,19 @@ export default function VerifyCertificate() {
                   {uploadLoading ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Verifying PDF…
+                      Verifying…
                     </>
                   ) : (
                     <>
                       <ShieldCheckIcon className="w-4 h-4" />
-                      Verify PDF
+                      Verify Certificate
                     </>
                   )}
                 </button>
               </form>
             </div>
 
-            {uploadLoading && <Spinner text="Hashing and verifying PDF…" />}
+            {uploadLoading && <Spinner text="Scanning QR code and comparing certificate fields…" />}
 
             {uploadResult && (
               <ResultCard

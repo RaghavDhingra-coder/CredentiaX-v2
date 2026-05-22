@@ -1,4 +1,5 @@
 import { ethers } from 'ethers'
+export { computeMetadataHashes, hashField, normalize, formatIssueDate } from './certMetadata.js'
 
 // Encode a human-readable cert ID string into bytes32 (UTF-8, zero-padded right).
 // Must match the frontend's toBytes32Id() implementation exactly.

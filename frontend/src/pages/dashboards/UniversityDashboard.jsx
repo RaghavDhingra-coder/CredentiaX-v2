@@ -322,7 +322,7 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
   const { address, isCorrectNetwork, getSigner, connect, isInstalled } = useWallet()
   const today = new Date().toISOString().split('T')[0]
 
-  const [form, setForm]     = useState({ holderId: holders[0]?.id || '', title: '', course: '', description: '', issueDate: today })
+  const [form, setForm]     = useState({ holderId: holders[0]?.id || '', title: '', course: '', usn: '', cgpa: '', description: '', issueDate: today })
   const [errors, setErrors] = useState({})
   const [step, setStep]     = useState('form')   // form | preparing | signing | pending | success | error
   const [issued, setIssued] = useState(null)
@@ -343,6 +343,7 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
     if (!form.title)     errs.title     = 'Title is required'
     if (!form.course)    errs.course    = 'Course is required'
     if (!form.issueDate) errs.issueDate = 'Issue date is required'
+    if (form.cgpa && isNaN(parseFloat(form.cgpa))) errs.cgpa = 'Enter a valid CGPA (e.g. 9.5)'
     if (Object.keys(errs).length) { setErrors(errs); return }
 
     if (useBlockchain) {
@@ -360,6 +361,8 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
         holderId:    form.holderId,
         title:       form.title,
         course:      form.course,
+        usn:         form.usn.trim()  || undefined,
+        cgpa:        form.cgpa.trim() || undefined,
         description: form.description || undefined,
         issueDate:   form.issueDate,
       })
@@ -386,6 +389,8 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
         holderId:    form.holderId,
         title:       form.title,
         course:      form.course,
+        usn:         form.usn.trim()  || undefined,
+        cgpa:        form.cgpa.trim() || undefined,
         description: form.description || undefined,
         issueDate:   form.issueDate,
       })
@@ -406,10 +411,8 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
       const signer = await getSigner()
       tx = await issueOnChain({
         signer,
-        certId:       cert.certificateId,
-        pdfHash:      cert.pdfHash,
-        holderAddress: payload.subjectAddress,
-        expiresAt:    payload.expiresAt,
+        certId:  cert.certificateId,
+        payload,
       })
     } catch (err) {
       setErrMsg(parseWalletError(err))
@@ -547,6 +550,24 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
                 <label className="block text-sm font-medium text-slate-300 mb-1.5">Course / Program <span className="text-red-400">*</span></label>
                 <input name="course" type="text" placeholder="Computer Science & Engineering" value={form.course} onChange={onChange} className={fieldCls('course')} />
                 {errors.course && <p className="mt-1 text-xs text-red-400">{errors.course}</p>}
+              </div>
+
+              {/* USN / Roll Number */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  USN / Roll Number <span className="text-slate-500 font-normal">(optional — used for tamper detection)</span>
+                </label>
+                <input name="usn" type="text" placeholder="1BM21CS001" value={form.usn} onChange={onChange} className={fieldCls('usn') + ' font-mono'} />
+                {errors.usn && <p className="mt-1 text-xs text-red-400">{errors.usn}</p>}
+              </div>
+
+              {/* CGPA */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                  CGPA / Marks <span className="text-slate-500 font-normal">(optional — used for tamper detection)</span>
+                </label>
+                <input name="cgpa" type="text" placeholder="9.5" value={form.cgpa} onChange={onChange} className={fieldCls('cgpa')} />
+                {errors.cgpa && <p className="mt-1 text-xs text-red-400">{errors.cgpa}</p>}
               </div>
 
               {/* Issue date */}

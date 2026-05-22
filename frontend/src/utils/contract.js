@@ -25,13 +25,36 @@ export function getIssuerContract(signer) {
   return new Contract(CONTRACT_ADDRESS, ABI, signer)
 }
 
-// Call issueCredential on-chain; returns the transaction object before mining
-export async function issueOnChain({ signer, certId, pdfHash, holderAddress, expiresAt }) {
+/**
+ * Call issueCredential on-chain with all metadata hashes.
+ *
+ * payload comes directly from the /prepare-issuance backend response:
+ *   { credentialIdBytes32, credentialHashBytes32,
+ *     nameHash, usnHash, courseHash, gradeHash, dateHash,
+ *     subjectAddress, expiresAt }
+ */
+export async function issueOnChain({ signer, certId, payload }) {
   const contract = getIssuerContract(signer)
-  const credentialId   = toBytes32Id(certId)
-  const credentialHash = toBytes32Hash(pdfHash)
-  const subject        = holderAddress || ethers.ZeroAddress
-  const expiry         = expiresAt || Math.floor(Date.now() / 1000) + 100 * 365 * 24 * 3600
 
-  return contract.issueCredential(credentialId, credentialHash, subject, expiry)
+  const credentialId   = payload.credentialIdBytes32   || toBytes32Id(certId)
+  const credentialHash = payload.credentialHashBytes32 || ethers.ZeroHash
+  const nameHash       = payload.nameHash   || ethers.ZeroHash
+  const usnHash        = payload.usnHash    || ethers.ZeroHash
+  const courseHash     = payload.courseHash || ethers.ZeroHash
+  const gradeHash      = payload.gradeHash  || ethers.ZeroHash
+  const dateHash       = payload.dateHash   || ethers.ZeroHash
+  const subject        = payload.subjectAddress || ethers.ZeroAddress
+  const expiry         = payload.expiresAt  || Math.floor(Date.now() / 1000) + 100 * 365 * 24 * 3600
+
+  return contract.issueCredential(
+    credentialId,
+    credentialHash,
+    nameHash,
+    usnHash,
+    courseHash,
+    gradeHash,
+    dateHash,
+    subject,
+    expiry,
+  )
 }

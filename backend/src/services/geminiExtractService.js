@@ -1,0 +1,168 @@
+import { GoogleGenerativeAI } from '@google/generative-ai'
+import { PDFParse, VerbosityLevel } from 'pdf-parse'
+
+// ── Prompts ───────────────────────────────────────────────────────────────────
+
+// Used when processing a PDF: Gemini reads extracted text, no vision needed.
+const PDF_TEXT_PROMPT = `You are extracting structured data from raw text that was parsed out of a certificate PDF.
+
+Extract these fields and return ONLY valid JSON:
+- certificateId: The certificate number. Look for a label like "CERTIFICATE ID" followed by a code like CERT-2026-000019.
+- title: The degree or program title (e.g. "be ise", "be cse", "b.tech cse"). This is the line that appears AFTER the course abbreviation. Do NOT use "Certificate of Completion".
+- course: The course, branch, or department abbreviation (e.g. "ise", "cse", "aiml", "mca"). It appears right after "has successfully completed".
+- holder: The student's full name. It appears right after "This is to certify that".
+- issuedBy: The university or institution name. It is usually the very first meaningful line of text. Do NOT use "Certificate of Completion" or "CERTIFICATE OF COMPLETION".
+- issueDate: The issue date. Look for a label like "ISSUED ON" followed by the date (e.g. "May 22, 2026").
+
+Rules:
+- Look for these exact label patterns in the text: "CERTIFICATE ID", "ISSUED ON", "has successfully completed", "This is to certify that".
+- issuedBy is the first institution/organization name, never the document type.
+- title is the line after the course code (skip if same as course or absent).
+- Use null (JSON null, not the string "null") for any field you cannot find.
+- Return ONLY raw JSON — no markdown, no explanation.
+
+Return exactly this structure:
+{
+  "certificateId": null,
+  "title": null,
+  "course": null,
+  "holder": null,
+  "issuedBy": null,
+  "issueDate": null
+}`
+
+// Used when processing an image: Gemini Vision reads the image and also decodes the QR.
+const IMAGE_PROMPT = `Extract the following fields from this certificate image and return ONLY valid JSON.
+
+Fields:
+- certificateId: Certificate number/ID visible on the certificate (e.g. CERT-2026-000019). Look near a label like "CERTIFICATE ID".
+- title: The degree or program title printed AFTER the course name (e.g. "be ise", "be cse"). Do NOT use "Certificate of Completion".
+- course: The course/branch/department abbreviation in bold (e.g. "ise", "cse", "aiml"). Appears after "has successfully completed".
+- holder: The full name of the student or candidate who received the certificate.
+- issuedBy: The name of the institution or university in the header (e.g. "ABCD", "MIT"). Never "Certificate of Completion".
+- issueDate: The issue date as printed (e.g. "May 22, 2026"). Look near the label "ISSUED ON".
+- qrUrl: Decode the QR code printed on the certificate (usually bottom-right) and report the full URL or text it encodes. This may contain a DIFFERENT certificate ID than what is visible in the text — report exactly what the QR encodes. Set to null if no QR code found.
+
+Rules:
+- Read ALL visible text carefully.
+- Preserve exact visible values.
+- issuedBy = institution name in the header, never decorative "Certificate of Completion" text.
+- Use null (JSON null, not the string "null") for missing fields.
+- Return ONLY raw JSON — no markdown, no explanation.
+
+Return exactly this structure:
+{
+  "certificateId": null,
+  "title": null,
+  "course": null,
+  "holder": null,
+  "issuedBy": null,
+  "issueDate": null,
+  "qrUrl": null
+}`
+
+// ── Gemini client ─────────────────────────────────────────────────────────────
+
+let _client = null
+
+function getModel() {
+  if (!_client) {
+    const key = process.env.GEMINI_API_KEY
+    if (!key) throw new Error('GEMINI_API_KEY is not set')
+    _client = new GoogleGenerativeAI(key)
+  }
+  return _client.getGenerativeModel({ model: 'gemini-2.0-flash' })
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function extractJSON(text) {
+  try { return JSON.parse(text) } catch {}
+  const start = text.indexOf('{')
+  const end   = text.lastIndexOf('}')
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)) } catch {}
+  }
+  throw new Error('No valid JSON in Gemini response: ' + text.slice(0, 200))
+}
+
+function sanitize(val) {
+  if (val === null || val === undefined) return null
+  const s = String(val).trim()
+  if (!s || s.toLowerCase() === 'null' || s.toLowerCase() === 'n/a' || s === '-') return null
+  return s
+}
+
+function mapParsed(parsed, includeQrUrl = false) {
+  const fields = {
+    certId:   sanitize(parsed.certificateId),
+    title:    sanitize(parsed.title),
+    course:   sanitize(parsed.course),
+    holder:   sanitize(parsed.holder),
+    issuedBy: sanitize(parsed.issuedBy),
+    date:     sanitize(parsed.issueDate),
+  }
+  if (includeQrUrl) fields.qrUrl = sanitize(parsed.qrUrl)
+  return fields
+}
+
+async function callGemini(content) {
+  const model = getModel()
+  const result = await model.generateContent(content)
+  let raw = result.response.text().trim()
+  raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  return extractJSON(raw)
+}
+
+// ── PDF path: extract text → Gemini text task ─────────────────────────────────
+
+async function extractFromPDF(buffer) {
+  // Step 1: get raw text from PDF using pdf-parse
+  const parser = new PDFParse({ data: buffer, verbosity: VerbosityLevel.ERRORS })
+  const result = await parser.getText()
+  await parser.destroy()
+  const rawText = (result.text || '').trim()
+
+  if (!rawText) throw new Error('pdf-parse returned empty text')
+
+  console.log('[geminiExtract/pdf] raw text (%d chars):\n%s', rawText.length, rawText.slice(0, 600))
+
+  // Step 2: send text to Gemini as a language task (no vision)
+  const prompt = PDF_TEXT_PROMPT + '\n\nCERTIFICATE TEXT:\n' + rawText.slice(0, 5000)
+  const parsed = await callGemini(prompt)
+
+  const fields = { ...mapParsed(parsed), qrUrl: null }  // QR not available from text
+  console.log('[geminiExtract/pdf] extracted fields:', JSON.stringify(fields))
+  return fields
+}
+
+// ── Image path: send image → Gemini Vision + QR decode ───────────────────────
+
+async function extractFromImage(buffer, mimetype) {
+  const parsed = await callGemini([
+    IMAGE_PROMPT,
+    { inlineData: { data: buffer.toString('base64'), mimeType: mimetype } },
+  ])
+
+  const fields = mapParsed(parsed, true)
+  console.log('[geminiExtract/image] extracted fields:', JSON.stringify(fields))
+  return fields
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Extract the 6 comparison fields from a certificate buffer.
+ * PDFs: pdf-parse → Gemini text task  (reliable; QR decode not available)
+ * Images: Gemini Vision                (includes QR URL decode)
+ *
+ * Returns { certId, title, course, holder, issuedBy, date, qrUrl }
+ */
+export async function geminiExtractFields(buffer, mimetype) {
+  const mt  = (mimetype || '').toLowerCase()
+  const ext = mt  // already lowercased mimetype
+  const isPDF = mt === 'application/pdf'
+
+  if (isPDF) return extractFromPDF(buffer)
+  return extractFromImage(buffer, mt || 'image/png')
+}

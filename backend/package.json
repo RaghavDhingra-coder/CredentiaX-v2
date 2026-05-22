@@ -17,6 +17,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -24,11 +25,15 @@
     "dotenv": "^17.4.2",
     "ethers": "^6.16.0",
     "express": "^5.2.1",
+    "jimp": "^0.22.12",
     "jsonwebtoken": "^9.0.3",
+    "jsqr": "^1.4.0",
     "multer": "^2.1.1",
+    "pdf-parse": "^2.4.5",
     "pdfkit": "^0.18.0",
     "pg": "^8.21.0",
     "qrcode": "^1.5.4",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

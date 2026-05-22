@@ -31,6 +31,8 @@ export async function generateCertificatePDF({
   holderName,
   title,
   course,
+  usn,
+  cgpa,
   description,
   issueDate,
   certificateId,
@@ -81,20 +83,36 @@ export async function generateCertificatePDF({
     doc.moveTo(W / 2 - 160, nameBottom).lineTo(W / 2 + 160, nameBottom)
       .lineWidth(1.5).strokeColor(C.accent).stroke()
 
+    // USN (displayed below name underline if provided)
+    let afterNameY = 212
+    if (usn) {
+      doc.font('Helvetica').fontSize(10).fillColor(C.muted)
+      centeredText(doc, `USN: ${usn}`, 205)
+      afterNameY = 222
+    }
+
     // "has successfully completed"
     doc.font('Helvetica-Oblique').fontSize(12).fillColor(C.muted)
-    centeredText(doc, 'has successfully completed', 212)
+    centeredText(doc, 'has successfully completed', afterNameY)
 
+    const courseY = afterNameY + 24
     // Course
     doc.font('Helvetica-Bold').fontSize(20).fillColor(C.bodyMid)
-    centeredText(doc, course, 236)
+    centeredText(doc, course, courseY)
 
     // Title (if different from course)
-    let descriptionY = 268
+    let descriptionY = courseY + 32
     if (title && title.trim().toLowerCase() !== course.trim().toLowerCase()) {
       doc.font('Helvetica').fontSize(13).fillColor(C.bodyLight)
-      centeredText(doc, title, 266)
-      descriptionY = 292
+      centeredText(doc, title, courseY + 28)
+      descriptionY = courseY + 52
+    }
+
+    // CGPA
+    if (cgpa) {
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(C.accent)
+      centeredText(doc, `CGPA: ${cgpa}`, descriptionY)
+      descriptionY += 18
     }
 
     // Description

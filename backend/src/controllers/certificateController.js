@@ -11,7 +11,7 @@ export const certificateController = {
     console.log('[CERT-CONTROLLER] Body:', req.body)
     
     try {
-      const { holderId, title, course, description, issueDate } = req.body
+      const { holderId, title, course, usn, cgpa, description, issueDate } = req.body
 
       if (!holderId || !title || !course || !issueDate) {
         console.log('[CERT-CONTROLLER] Validation failed - missing required fields')
@@ -24,6 +24,8 @@ export const certificateController = {
         issuedByUserId: req.user.id,
         title,
         course,
+        usn,
+        cgpa,
         description,
         issueDate,
       })
@@ -109,7 +111,7 @@ export const certificateController = {
   // Phase 1: generate PDF+hash, persist as PENDING_BLOCKCHAIN, return blockchain payload
   async prepareIssuance(req, res, next) {
     try {
-      const { holderId, title, course, description, issueDate } = req.body
+      const { holderId, title, course, usn, cgpa, description, issueDate } = req.body
       if (!holderId || !title || !course || !issueDate) {
         return errorResponse(res, 'holderId, title, course, and issueDate are required', 422)
       }
@@ -119,6 +121,8 @@ export const certificateController = {
         issuedByUserId: req.user.id,
         title,
         course,
+        usn,
+        cgpa,
         description,
         issueDate,
       })
