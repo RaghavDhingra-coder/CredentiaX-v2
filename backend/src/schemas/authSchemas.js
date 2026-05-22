@@ -38,7 +38,7 @@ export const createHolderSchema = z.object({
   walletAddress: z
     .string()
     .trim()
-    .max(255, 'Wallet address too long')
+    .regex(/^0x[0-9a-fA-F]{40}$/, 'Invalid Ethereum wallet address')
     .optional()
     .or(z.literal(''))
     .transform((v) => (v === '' ? undefined : v)),

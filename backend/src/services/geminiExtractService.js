@@ -13,6 +13,7 @@ Extract these fields and return ONLY valid JSON:
 - holder: The student's FULL NAME (e.g. "John Smith", "Priya Kumar"). It appears right after "This is to certify that". It is NEVER a student ID, roll number, or USN.
 - usn: The student's University Seat Number or Roll Number (e.g. "1RV21CS042", "4NI20IS073"). It appears next to a label like "USN" or "Roll No". It is a short alphanumeric code, NOT a person's name.
 - issuedBy: The university or institution name. It is usually the very first meaningful line of text. Do NOT use "Certificate of Completion" or "CERTIFICATE OF COMPLETION".
+- cgpa: The student's CGPA or marks/score (e.g. "9.5", "85", "10"). Look near a label like "CGPA" or "Marks" or "Score". It is a numeric value, NOT a name or ID.
 - issueDate: The issue date. Look for a label like "ISSUED ON" followed by the date (e.g. "May 22, 2026").
 
 CRITICAL DISTINCTION — holder vs usn:
@@ -35,6 +36,7 @@ Return exactly this structure:
   "course": null,
   "holder": null,
   "usn": null,
+  "cgpa": null,
   "issuedBy": null,
   "issueDate": null
 }`
@@ -48,6 +50,7 @@ Fields:
 - course: The course/branch/department abbreviation in bold (e.g. "ise", "cse", "aiml"). Appears after "has successfully completed".
 - holder: The student's FULL NAME (e.g. "John Smith", "Priya Kumar"). Appears after "This is to certify that". It is NEVER a student ID, roll number, or USN code.
 - usn: The student's University Seat Number or Roll Number (e.g. "1RV21CS042", "4NI20IS073"). Look near a label like "USN" or "Roll No". It is a short alphanumeric code, NOT a person's name.
+- cgpa: The student's CGPA or marks/score (e.g. "9.5", "85", "10"). Look near a label like "CGPA" or "Marks" or "Score". It is a numeric value, NOT a name or ID.
 - issuedBy: The institution or university name in the certificate header — the large bold text at the very top of the certificate document. Never "Certificate of Completion". Never a browser tab title or window title.
 - issueDate: The issue date as printed (e.g. "May 22, 2026"). Look near the label "ISSUED ON".
 - qrUrl: Decode the QR code printed on the certificate (usually bottom-right) and report the full URL or text it encodes. This may contain a DIFFERENT certificate ID than what is visible in the text — report exactly what the QR encodes. Set to null if no QR code found.
@@ -71,6 +74,7 @@ Return exactly this structure:
   "course": null,
   "holder": null,
   "usn": null,
+  "cgpa": null,
   "issuedBy": null,
   "issueDate": null,
   "qrUrl": null
@@ -115,6 +119,7 @@ function mapParsed(parsed, includeQrUrl = false) {
     course:   sanitize(parsed.course),
     holder:   sanitize(parsed.holder),
     usn:      sanitize(parsed.usn),
+    cgpa:     sanitize(parsed.cgpa),
     issuedBy: sanitize(parsed.issuedBy),
     date:     sanitize(parsed.issueDate),
   }

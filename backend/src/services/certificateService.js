@@ -9,6 +9,7 @@ import { generateCertificatePDF } from '../utils/pdf.js'
 import { blockchainService } from './blockchainService.js'
 import { config } from '../config/env.js'
 import { encodeId, encodeHash, farFutureExpiry, computeMetadataHashes } from '../utils/blockchainPayload.js'
+import { ethers } from 'ethers'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_DIR = join(__dirname, '../../uploads/certificates')
@@ -55,6 +56,9 @@ export const certificateService = {
     if (!holder || holder.role !== 'HOLDER') throw new AppError('Holder not found', 404)
     if (holder.createdByUniversityId !== issuedByUserId) {
       throw new AppError('This holder belongs to a different institution', 403)
+    }
+    if (holder.walletAddress && !ethers.isAddress(holder.walletAddress)) {
+      throw new AppError('Holder wallet address is invalid. Use a 0x-prefixed Ethereum address or leave it blank.', 400)
     }
 
     const issuer = await prisma.user.findUnique({ where: { id: issuedByUserId } })

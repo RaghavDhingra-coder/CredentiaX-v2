@@ -46,6 +46,8 @@ const COMPARE_FIELDS = [
   { key: 'title',    label: 'Title'           },
   { key: 'course',   label: 'Course'          },
   { key: 'holder',   label: 'Holder'          },
+  { key: 'usn',      label: 'USN'             },
+  { key: 'cgpa',     label: 'CGPA / Marks'   },
   { key: 'issuedBy', label: 'Issued By'       },
   { key: 'date',     label: 'Issue Date'      },
 ]
@@ -186,6 +188,8 @@ export const verificationService = {
       title:    cert.title              || null,
       course:   cert.course             || null,
       holder:   cert.holder?.name       || null,
+      usn:      cert.usn                || null,
+      cgpa:     cert.cgpa != null ? String(cert.cgpa) : null,
       issuedBy: cert.issuedByUser?.name || null,
       date:     cert.issueDate ? formatIssueDate(cert.issueDate) : null,
     }
@@ -196,6 +200,8 @@ export const verificationService = {
       title:    textFields.title    || null,
       course:   textFields.course   || null,
       holder:   textFields.holder   || null,
+      usn:      textFields.usn      || null,
+      cgpa:     textFields.cgpa     || null,
       issuedBy: textFields.issuedBy || null,
       date:     textFields.date     || null,
     }

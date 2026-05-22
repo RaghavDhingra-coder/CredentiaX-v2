@@ -22,6 +22,9 @@ export function toBytes32Hash(hexHash) {
 // Instantiate contract with a MetaMask signer for write operations
 export function getIssuerContract(signer) {
   if (!CONTRACT_ADDRESS) throw new Error('VITE_CONTRACT_ADDRESS is not configured')
+  if (!ethers.isAddress(CONTRACT_ADDRESS)) {
+    throw new Error('VITE_CONTRACT_ADDRESS must be a 0x-prefixed Ethereum address')
+  }
   return new Contract(CONTRACT_ADDRESS, ABI, signer)
 }
 
@@ -45,6 +48,10 @@ export async function issueOnChain({ signer, certId, payload }) {
   const dateHash       = payload.dateHash   || ethers.ZeroHash
   const subject        = payload.subjectAddress || ethers.ZeroAddress
   const expiry         = payload.expiresAt  || Math.floor(Date.now() / 1000) + 100 * 365 * 24 * 3600
+
+  if (!ethers.isAddress(subject)) {
+    throw new Error('Holder wallet address must be a 0x-prefixed Ethereum address')
+  }
 
   return contract.issueCredential(
     credentialId,
