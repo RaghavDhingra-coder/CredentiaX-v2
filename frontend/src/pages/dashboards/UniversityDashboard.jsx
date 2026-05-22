@@ -328,8 +328,10 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
   const [issued, setIssued] = useState(null)
   const [txHash, setTxHash] = useState(null)
   const [errMsg, setErrMsg] = useState('')
+  const [issuanceMode, setIssuanceMode] = useState(() => isContractConfigured() ? 'blockchain' : 'legacy')
 
-  const useBlockchain = isContractConfigured() && address && isCorrectNetwork
+  const blockchainReady = isContractConfigured() && address && isCorrectNetwork
+  const useBlockchain = issuanceMode === 'blockchain'
 
   function onChange(e) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
@@ -345,6 +347,11 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
     if (!form.issueDate) errs.issueDate = 'Issue date is required'
     if (form.cgpa && isNaN(parseFloat(form.cgpa))) errs.cgpa = 'Enter a valid CGPA (e.g. 9.5)'
     if (Object.keys(errs).length) { setErrors(errs); return }
+
+    if (useBlockchain && !blockchainReady) {
+      toast.error('Connect MetaMask on the configured network or choose database only.')
+      return
+    }
 
     if (useBlockchain) {
       await runBlockchainFlow()
@@ -378,6 +385,15 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
   }
 
   // ── Decentralized (on-chain) path ───────────────────────────────────────────
+  async function abandonPendingCertificate(certificateId) {
+    if (!certificateId) return
+    try {
+      await api.delete(`/certificates/pending/${certificateId}`)
+    } catch (err) {
+      console.warn('[certificate] pending issuance cleanup failed:', err.response?.data?.message || err.message)
+    }
+  }
+
   async function runBlockchainFlow() {
     setErrMsg('')
 
@@ -415,6 +431,7 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
         payload,
       })
     } catch (err) {
+      await abandonPendingCertificate(cert.certificateId)
       setErrMsg(parseWalletError(err))
       setStep('error')
       return
@@ -427,6 +444,9 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
       receipt = await tx.wait()
       setTxHash(receipt.hash)
     } catch (err) {
+      if (err.receipt?.status === 0) {
+        await abandonPendingCertificate(cert.certificateId)
+      }
       setErrMsg('Transaction reverted on-chain: ' + (err?.reason || err?.message || 'unknown error'))
       setStep('error')
       return
@@ -492,8 +512,34 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
           {step === 'form' && (
             <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
 
-              {/* Blockchain notice */}
-              {useBlockchain ? (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1.5">Issuance mode</label>
+                <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-800 border border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setIssuanceMode('blockchain')}
+                    aria-pressed={issuanceMode === 'blockchain'}
+                    className={`min-h-10 px-3 rounded-lg text-sm font-medium transition-colors ${issuanceMode === 'blockchain' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-950/30' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                  >
+                    Blockchain
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIssuanceMode('legacy')}
+                    aria-pressed={issuanceMode === 'legacy'}
+                    className={`min-h-10 px-3 rounded-lg text-sm font-medium transition-colors ${issuanceMode === 'legacy' ? 'bg-slate-600 text-white shadow-lg shadow-black/20' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                  >
+                    Database only
+                  </button>
+                </div>
+              </div>
+
+              {/* Issuance notice */}
+              {issuanceMode === 'legacy' ? (
+                <div className="px-3 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+                  Issues the PDF and verification record without a MetaMask transaction.
+                </div>
+              ) : blockchainReady ? (
                 <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-indigo-500/8 border border-indigo-500/20 text-xs text-indigo-300">
                   <svg className="w-4 h-4 shrink-0 mt-0.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />

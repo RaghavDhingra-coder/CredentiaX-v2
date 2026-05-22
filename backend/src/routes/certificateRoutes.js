@@ -24,6 +24,9 @@ console.log('[CERT-ROUTES] ✓ POST /prepare-issuance registered')
 router.post('/finalize-issuance', ...protectRoute('UNIVERSITY'), certificateController.finalizeIssuance)
 console.log('[CERT-ROUTES] ✓ POST /finalize-issuance registered')
 
+router.delete('/pending/:certificateId', ...protectRoute('UNIVERSITY'), certificateController.abandonPendingIssuance)
+console.log('[CERT-ROUTES] ✓ DELETE /pending/:certificateId registered')
+
 // HOLDER: view their own certificates
 router.get('/my-certificates', ...protectRoute('HOLDER'), certificateController.myCertificates)
 console.log('[CERT-ROUTES] ✓ GET /my-certificates registered')

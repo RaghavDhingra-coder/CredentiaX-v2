@@ -155,4 +155,18 @@ export const certificateController = {
       next(err)
     }
   },
+
+  // DELETE /certificates/pending/:certificateId - UNIVERSITY only
+  // Remove local work prepared for a blockchain transaction that never started.
+  async abandonPendingIssuance(req, res, next) {
+    try {
+      const abandoned = await certificateService.abandonPendingCertificate(
+        req.params.certificateId,
+        req.user.id,
+      )
+      return successResponse(res, { abandoned })
+    } catch (err) {
+      next(err)
+    }
+  },
 }

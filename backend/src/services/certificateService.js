@@ -1,4 +1,4 @@
-import { writeFile, mkdir } from 'fs/promises'
+import { writeFile, mkdir, unlink } from 'fs/promises'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import prisma from '../config/prisma.js'
@@ -91,33 +91,6 @@ export const certificateService = {
     await writeFile(fullPath, pdfBuffer)
     const pdfPath = `uploads/certificates/${fileName}`
 
-    let blockchainTxHash = null
-    if (blockchainService.isConfigured() && holder.walletAddress) {
-      try {
-        const { nameHash, usnHash, courseHash, gradeHash, dateHash } = computeMetadataHashes({
-          name:      holder.name,
-          usn:       usn || '',
-          course,
-          cgpa:      cgpa || '',
-          issueDate: new Date(issueDate),
-        })
-        const result = await blockchainService.issueCredentialOnChain({
-          credentialId:    certId,
-          credentialHash:  `0x${pdfHash.slice(0, 62)}`,
-          nameHash,
-          usnHash,
-          courseHash,
-          gradeHash,
-          dateHash,
-          subjectAddress:  holder.walletAddress,
-          expiresAt:       null,
-        })
-        blockchainTxHash = result.txHash
-      } catch (err) {
-        console.warn('[blockchain] issuance failed (non-critical):', err.message)
-      }
-    }
-
     const certificate = await prisma.certificate.create({
       data: {
         certificateId:       certId,
@@ -129,7 +102,7 @@ export const certificateService = {
         issueDate:           new Date(issueDate),
         pdfHash,
         pdfPath,
-        blockchainTxHash,
+        blockchainTxHash:    null,
         issuerWalletAddress: issuer.walletAddress || null,
         isRevoked:           false,
         holderId,
@@ -190,6 +163,40 @@ export const certificateService = {
 
   getFilePath(pdfPath) {
     return join(__dirname, '../..', pdfPath)
+  },
+
+  async abandonPendingCertificate(certificateId, requestingUserId) {
+    const cert = await prisma.certificate.findUnique({
+      where: { certificateId },
+      select: {
+        certificateId: true,
+        issuedByUserId: true,
+        pdfPath: true,
+        status: true,
+      },
+    })
+
+    if (!cert) return null
+    if (cert.issuedByUserId !== requestingUserId) {
+      throw new AppError('Only the issuing university can abandon this certificate', 403)
+    }
+    if (cert.status !== 'PENDING_BLOCKCHAIN') {
+      throw new AppError('Only pending blockchain certificates can be abandoned', 409)
+    }
+
+    await prisma.certificate.delete({ where: { certificateId } })
+
+    if (cert.pdfPath) {
+      try {
+        await unlink(this.getFilePath(cert.pdfPath))
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.warn('[certificate] failed to remove abandoned PDF:', err.message)
+        }
+      }
+    }
+
+    return { certificateId: cert.certificateId }
   },
 
   // ── Phase-1: generate PDF/hash, persist as PENDING_BLOCKCHAIN ──────────────
