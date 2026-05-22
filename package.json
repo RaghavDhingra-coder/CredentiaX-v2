@@ -10,5 +10,21 @@
     "contracts:test": "npm run test --prefix smart-contracts",
     "contracts:node": "npm run node --prefix smart-contracts",
     "install:all": "npm install --prefix frontend && npm install --prefix backend && npm install --prefix smart-contracts"
+  },
+  "main": "test-backend-direct.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RaghavDhingra-coder/CredentiaX-v2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RaghavDhingra-coder/CredentiaX-v2/issues"
+  },
+  "homepage": "https://github.com/RaghavDhingra-coder/CredentiaX-v2#readme",
+  "devDependencies": {
+    "hardhat": "^3.5.1"
   }
 }
