@@ -1,466 +1,446 @@
-<div align="center">
-
 # CredentiaX
 
-### Blockchain-Powered Decentralized Credential Verification
+Blockchain-based credential issuance and verification for universities, students, verifiers, and administrators.
 
-**Issue · Verify · Trust — without intermediaries**
+CredentiaX lets a university create holder accounts, issue certificate PDFs with embedded QR codes, anchor credential metadata on an EVM smart contract, and verify uploaded certificates by comparing extracted document fields against the registry record.
 
-[![Solidity](https://img.shields.io/badge/Solidity-0.8.24-363636?logo=solidity)](https://soliditylang.org)
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
-[![Node.js](https://img.shields.io/badge/Node.js-ESM-339933?logo=node.js)](https://nodejs.org)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-4169E1?logo=postgresql)](https://neon.tech)
-[![Hardhat](https://img.shields.io/badge/Hardhat-2.x-yellow?logo=ethereum)](https://hardhat.org)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+## What It Does
 
-</div>
+- Universities create holder/student accounts and issue certificates.
+- Certificates are generated as PDFs, stored under the backend uploads folder, and assigned IDs like `CERT-2026-000001`.
+- QR codes embed a verification URL containing the certificate ID.
+- On-chain issuance is a two-step flow: the backend prepares the certificate and hashes, then MetaMask signs the smart-contract transaction, then the backend finalizes the record.
+- Verifiers upload a certificate PDF or image. The backend extracts certificate fields, scans/decodes QR data where possible, looks up the registry record, and flags mismatches as tampering.
+- Holders can view and download their own certificates.
+- Admins can inspect users and system-wide analytics.
 
----
+## Architecture
 
-## What is CredentiaX?
-
-CredentiaX is a full-stack decentralized application that lets **universities issue tamper-proof digital credentials** and **anyone verify them instantly** — no emails, no phone calls, no middlemen.
-
-Every certificate is:
-- **Generated** as a PDF with an embedded QR code
-- **Hashed** with SHA-256 for tamper detection
-- **Anchored on-chain** via a MetaMask-signed transaction
-- **Verifiable** in under a second by scanning the QR code with any camera
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND (React 19 + Vite)              │
-│                                                                  │
-│  Home  ·  Login  ·  Register  ·  Dashboard  ·  /verify/:certId  │
-│                                                                  │
-│  Role dashboards:                                                │
-│    UNIVERSITY  →  issue, revoke, analytics, wallet sign          │
-│    HOLDER      →  view & download own certificates               │
-│    VERIFIER    →  QR scanner, manual lookup, blockchain proof    │
-│    ADMIN       →  system-wide analytics & user management        │
-└───────────────────────┬──────────────────────────────────────────┘
-                        │  HTTPS / REST (Axios, cookie-based JWT)
-┌───────────────────────▼──────────────────────────────────────────┐
-│                    BACKEND (Express 5 + Prisma)                  │
-│                                                                  │
-│  Auth · Certificates · Verification · Blockchain · Analytics    │
-│  PDF generation (PDFKit) · QR codes · SHA-256 hashing           │
-│  Multer uploads · Zod validation · JWT middleware                │
-└──────────┬────────────────────────────┬───────────────────────────┘
-           │                            │
-┌──────────▼──────┐          ┌──────────▼──────────────────────────┐
-│   Neon Postgres │          │  EVM Blockchain (Hardhat / Amoy)    │
-│   (Prisma ORM)  │          │                                     │
-│                 │          │  CredentialRegistry.sol             │
-│  users          │          │  ├─ issueCredential(bytes32×4)      │
-│  certificates   │          │  ├─ revokeCredential(bytes32)       │
-│  universities   │          │  └─ verifyCredential(bytes32)       │
-│  verification_  │          │       → (bool valid, uint8 code)    │
-│    logs         │          └─────────────────────────────────────┘
-└─────────────────┘
+```text
+CredentiaX-v2
+├── frontend/          React 19 + Vite 8 SPA
+├── backend/           Express 5 API + Prisma + PostgreSQL
+├── smart-contracts/   Hardhat + Solidity CredentialRegistry
+├── README.md          Project guide
+└── *.md, test-*.js    Extra implementation notes and test helpers
 ```
 
----
+Runtime flow:
 
-## Feature Highlights
+```text
+React app
+  ├─ Auth, role dashboards, wallet connection, certificate upload verification
+  └─ Axios calls through Vite proxy: /api/v1 -> http://localhost:3001
 
-### For Universities
-- Create student accounts (Holders) under their institution
-- Issue PDF certificates with embedded QR codes — **one click**
-- **Two-phase blockchain issuance**: backend prepares payload → MetaMask pops up → wallet signs → transaction confirmed → certificate goes ACTIVE
-- Revoke compromised credentials on-chain
-- Analytics dashboard: certificates issued, blockchain adoption rate, recent activity
+Express API
+  ├─ JWT auth with httpOnly cookies
+  ├─ Prisma models for users, certificates, universities, verification logs
+  ├─ PDF generation, QR generation, SHA-256 hashing
+  ├─ Gemini extraction with PDF/OCR fallback for verification
+  └─ ethers.js contract reads and optional server-side contract writes
 
-### For Holders (Students)
-- View all received certificates
-- Download signed PDFs at any time
-
-### For Verifiers (Employers, Institutions)
-- **Live camera QR scanner** — point at any certificate, get instant result
-- Manual certificate ID lookup
-- Upload PDF for SHA-256 tamper detection
-- Full **blockchain proof panel**: TX hash, issuer wallet, block number, chain
-
-### For Everyone (Public)
-- `/verify/:certId` — shareable URL embedded in every QR code
-- No login required to verify any certificate
-
----
+CredentialRegistry.sol
+  ├─ Stores PDF hash plus normalized metadata field hashes
+  ├─ Tracks issuer, issue time, expiry, revoked state
+  └─ Returns validity status codes for on-chain verification
+```
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19, Vite 8, Tailwind CSS 4, React Router v7 |
-| UI / Charts | Recharts, React Hot Toast |
-| Web3 Client | Ethers.js v6, MetaMask (BrowserProvider) |
-| QR Scanning | html5-qrcode 2.3 |
-| Backend | Node.js (ESM), Express 5 |
-| ORM / DB | Prisma 5, Neon PostgreSQL |
-| Auth | JWT (httpOnly cookies), bcryptjs |
-| Validation | Zod 4 |
-| PDF & QR | PDFKit, qrcode |
-| File Uploads | Multer (memory storage) |
-| Smart Contracts | Solidity 0.8.24, Hardhat 2 |
-| Blockchain | Hardhat Local (dev), Polygon Amoy testnet (staging) |
+| Area | Stack |
+| --- | --- |
+| Frontend | React 19, Vite 8, React Router 7, Tailwind CSS 4 |
+| UI/data | Recharts, React Hot Toast |
+| Wallet/web3 | MetaMask, ethers.js v6 |
+| Backend | Node.js ESM, Express 5 |
+| Database | PostgreSQL/Neon, Prisma 5 |
+| Auth | JWT cookies, bcryptjs |
+| Validation/uploads | Zod, Multer |
+| Certificates | PDFKit, qrcode, SHA-256 hashing |
+| Verification extraction | Gemini API, pdf-parse, Tesseract.js, Jimp, jsQR |
+| Smart contracts | Solidity 0.8.24, Hardhat 2 |
+| Networks | Local Hardhat, Polygon Amoy, Sepolia config available |
 
----
+## Folder Structure
 
-## Repository Layout
+```text
+frontend/
+├── src/
+│   ├── abis/                  Contract ABI used by the browser
+│   ├── components/            Navbar, ProtectedRoute, QRScanner, WalletButton
+│   ├── components/analytics/  Dashboard analytics UI
+│   ├── context/               AuthContext and WalletContext
+│   ├── layouts/               MainLayout
+│   ├── pages/                 Home, Login, Register, Dashboard, VerifyCertificate
+│   ├── pages/dashboards/      Holder, University, Verifier, Admin dashboards
+│   ├── routes/                App route definitions
+│   ├── services/              Axios API client
+│   └── utils/                 Contract and QR parsing helpers
+├── vite.config.js             Dev server and /api proxy
+└── package.json
 
-```
-CredentiaX/
-├── frontend/                  # React + Vite SPA
-│   └── src/
-│       ├── abis/              # Compiled contract ABI
-│       ├── components/        # QRScanner, Navbar, WalletButton…
-│       ├── context/           # AuthContext, WalletContext
-│       ├── pages/
-│       │   ├── dashboards/    # University / Holder / Verifier / Admin
-│       │   ├── Home.jsx
-│       │   ├── VerifyCertificate.jsx
-│       │   └── …
-│       ├── services/          # Axios client (api.js)
-│       └── utils/             # contract.js, parseQRCode.js, …
-│
-├── backend/                   # Express API
-│   └── src/
-│       ├── config/            # env, prisma, blockchain clients
-│       ├── controllers/       # thin HTTP layer
-│       ├── middleware/        # auth, upload, validation, errors
-│       ├── routes/            # 9 route modules
-│       ├── services/          # business logic
-│       └── utils/             # PDF, QR, hash, AppError…
-│
-├── smart-contracts/           # Hardhat project
-│   ├── contracts/
-│   │   └── CredentialRegistry.sol
-│   ├── scripts/
-│   │   └── deploy.js
-│   └── test/
-│       └── CredentialRegistry.test.js
-│
-└── README.md
-```
+backend/
+├── prisma/
+│   ├── schema.prisma          User, University, Certificate, VerificationLog models
+│   └── migrations/            Database migrations
+├── src/
+│   ├── config/                env, Prisma, blockchain contract setup
+│   ├── controllers/           HTTP request handlers
+│   ├── middleware/            Auth, validation, upload, errors, logging
+│   ├── routes/                API route modules mounted under /api/v1
+│   ├── schemas/               Zod auth/request schemas
+│   ├── services/              Auth, users, holders, certificates, verification, analytics
+│   └── utils/                 PDF, QR, hashing, metadata, responses
+├── uploads/                   Generated certificate files
+└── package.json
 
----
-
-## Database Schema
-
-```
-users
-  id · name · email · password · role · walletAddress
-  createdByUniversityId → users(id)   [UNIVERSITY → HOLDER link]
-
-certificates
-  id · certificateId (CERT-YYYY-NNNNNN) · title · course
-  pdfHash · pdfPath · blockchainTxHash · issuerWalletAddress
-  status (PENDING_BLOCKCHAIN | ACTIVE | FAILED)
-  chainId · blockNumber · isRevoked
-  holderId → users · issuedByUserId → users
-
-universities
-  universityName · universityCode · walletAddress · isVerified
-
-verification_logs
-  verifierIp · verificationStatus · certificateId → certificates
+smart-contracts/
+├── contracts/CredentialRegistry.sol
+├── scripts/deploy.js
+├── test/CredentialRegistry.test.js
+├── hardhat.config.js
+└── package.json
 ```
 
----
+## Roles
+
+| Role | Main capabilities |
+| --- | --- |
+| `HOLDER` | View and download certificates issued to them |
+| `UNIVERSITY` | Create holders, issue certificates, finalize blockchain transactions, revoke issued certificates, view university analytics |
+| `VERIFIER` | Access the protected `/verify` page and upload certificates for integrity checks |
+| `ADMIN` | View all users, access admin analytics, and use admin-protected capabilities |
+
+## Frontend Routes
+
+| Route | Access | Description |
+| --- | --- | --- |
+| `/` | Public | Landing/home page |
+| `/login` | Guest | Login form |
+| `/register` | Guest | Registration form |
+| `/dashboard` | Authenticated | Role-specific dashboard |
+| `/verify` | `VERIFIER`, `ADMIN` | Certificate upload verification page |
+| `/unauthorized` | Public | Access denied page |
+
+Note: generated QR codes currently point to `/verify/<certificateId>`, while the React router currently exposes `/verify` as a protected upload page. Direct public certificate lookup is available through the backend API route `GET /api/v1/certificates/:certificateId`.
+
+## Backend API
+
+All routes are mounted under `/api/v1`.
+
+### Auth
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| `POST` | `/auth/register` | Public | Register and set auth cookie |
+| `POST` | `/auth/login` | Public | Login and set auth cookie |
+| `POST` | `/auth/logout` | Public | Clear auth cookie |
+| `GET` | `/auth/me` | Authenticated | Current user |
+| `PATCH` | `/auth/wallet` | Authenticated | Link or unlink wallet address |
+
+### Certificates
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| `POST` | `/certificates/issue` | `UNIVERSITY` | Legacy single-step issuance |
+| `POST` | `/certificates/prepare-issuance` | `UNIVERSITY` | Generate PDF, hash fields, save as `PENDING_BLOCKCHAIN`, return MetaMask payload |
+| `POST` | `/certificates/finalize-issuance` | `UNIVERSITY` | Save transaction data and mark certificate `ACTIVE` |
+| `GET` | `/certificates/my-certificates` | `HOLDER` | Holder's certificates |
+| `GET` | `/certificates/issued` | `UNIVERSITY` | Certificates issued by the signed-in university |
+| `GET` | `/certificates/file/:certificateId` | Authenticated owner/issuer/admin | Download certificate PDF |
+| `PATCH` | `/certificates/:id/revoke` | `UNIVERSITY`, `ADMIN` | Revoke a database certificate record |
+| `GET` | `/certificates/:certificateId` | Public | Lookup certificate by public certificate ID |
+
+### Verification
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| `POST` | `/verify/upload` | Public API | Upload PDF/image as `pdf`; returns `VALID`, `TAMPERED`, `REVOKED`, or `NOT_FOUND` |
+
+### Blockchain
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/blockchain/status` | Authenticated | Provider/contract health |
+| `POST` | `/blockchain/test-issue` | `UNIVERSITY` | Test server-side on-chain issue |
+| `POST` | `/blockchain/revoke` | `UNIVERSITY` | Revoke on-chain credential |
+| `GET` | `/blockchain/verify/:credentialId` | Authenticated | Read on-chain credential state |
+
+### Users, Holders, Universities, Analytics, Health
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| `GET` | `/users` | `ADMIN` | List users |
+| `GET` | `/users/:id` | `ADMIN` | User detail |
+| `POST` | `/holders` | `UNIVERSITY` | Create holder under the university |
+| `GET` | `/holders` | `UNIVERSITY` | List university holders |
+| `GET` | `/holders/:id` | `UNIVERSITY` | Holder detail |
+| `GET` | `/universities` | Public | List universities |
+| `GET` | `/universities/:id` | Public | University detail |
+| `POST` | `/universities` | `ADMIN`, `UNIVERSITY` | Create university profile |
+| `GET` | `/analytics/university` | `UNIVERSITY` | University-scoped analytics |
+| `GET` | `/analytics/admin` | `ADMIN` | System analytics |
+| `GET` | `/health` | Public | API health |
+| `GET` | `/health/db` | Public | Database health |
+
+## Database Model Summary
+
+```text
+User
+  id, name, email, password, role, walletAddress
+  createdByUniversityId links holders to the university user that created them
+
+University
+  universityName, universityCode, walletAddress, isVerified
+
+Certificate
+  certificateId, title, course, description, usn, cgpa, issueDate
+  pdfHash, pdfPath, blockchainTxHash, issuerWalletAddress
+  status: PENDING_BLOCKCHAIN | ACTIVE | FAILED
+  chainId, blockNumber, isRevoked
+  holderId -> User
+  issuedByUserId -> User
+
+VerificationLog
+  verifierIp, verificationStatus
+  certificateId -> Certificate database id
+```
 
 ## Smart Contract
 
-`CredentialRegistry.sol` uses **flat primitive mappings** — no structs, no dynamic-array returns — for maximum EVM compatibility.
+`smart-contracts/contracts/CredentialRegistry.sol` stores primitive mappings for compatibility with Hardhat and simple contract reads.
+
+It stores:
+
+- `credHash`: PDF SHA-256 reference hash as `bytes32`
+- `certNameHash`, `certUsnHash`, `certCourseHash`, `certGradeHash`, `certDateHash`: normalized metadata hashes
+- `credIssuer`, `credIssuedAt`, `credExpiresAt`, `credRevoked`
+
+Main functions:
 
 ```solidity
-mapping(bytes32 => bytes32)  public credHash;
-mapping(bytes32 => address)  public credIssuer;
-mapping(bytes32 => uint256)  public credIssuedAt;
-mapping(bytes32 => uint256)  public credExpiresAt;
-mapping(bytes32 => bool)     public credRevoked;
-
-function issueCredential(bytes32 credentialId, bytes32 credentialHash,
-                         address subject, uint256 expiresAt) external;
+function issueCredential(
+    bytes32 credentialId,
+    bytes32 credentialHash,
+    bytes32 nameHash,
+    bytes32 usnHash,
+    bytes32 courseHash,
+    bytes32 gradeHash,
+    bytes32 dateHash,
+    address subject,
+    uint256 expiresAt
+) external;
 
 function revokeCredential(bytes32 credentialId) external;
 
-// Returns (valid, statusCode): 0=valid 1=notFound 2=revoked 3=expired
 function verifyCredential(bytes32 credentialId)
     external view returns (bool valid, uint8 statusCode);
 ```
 
-Certificate IDs are encoded to `bytes32` via `zeroPadBytes(hexlify(toUtf8Bytes(certId)), 32)` and PDF hashes are sent as `0x` + the raw SHA-256 hex string.
+Status codes from `verifyCredential`:
 
----
+- `0`: valid
+- `1`: not found
+- `2`: revoked
+- `3`: expired
 
-## Issuance Flow (Two-Phase Blockchain)
+## Issuance Logic
 
-```
-University clicks "Issue Certificate"
-        │
-        ▼
-[Phase 1 — Backend]
-POST /api/v1/certificates/prepare-issuance
-  • validates holder belongs to this university
-  • generates PDF + QR code
-  • SHA-256 hashes the PDF
-  • saves certificate as PENDING_BLOCKCHAIN
-  • returns { blockchainPayload: { credentialIdBytes32, credentialHashBytes32,
-              subjectAddress, expiresAt, contractAddress, chainId } }
-        │
-        ▼
-[Frontend — MetaMask]
-  • calls contract.issueCredential(...) with the payload
-  • MetaMask popup → user confirms → tx broadcast
-  • waits for tx.wait() (1 confirmation)
-        │
-        ▼
-[Phase 2 — Backend]
-POST /api/v1/certificates/finalize-issuance
-  { certificateId, txHash, signerAddress, chainId, blockNumber }
-  • marks certificate ACTIVE
-  • stores txHash, blockNumber, chainId
-        │
-        ▼
-Certificate is live — QR code works instantly
+```text
+1. University creates or selects a HOLDER account.
+2. Frontend calls POST /api/v1/certificates/prepare-issuance.
+3. Backend validates the holder belongs to the university.
+4. Backend generates a certificate ID, QR code, PDF, PDF hash, and metadata hashes.
+5. Backend stores the certificate as PENDING_BLOCKCHAIN.
+6. Frontend sends the returned payload to CredentialRegistry.issueCredential through MetaMask.
+7. After transaction confirmation, frontend calls POST /api/v1/certificates/finalize-issuance.
+8. Backend stores tx hash, signer address, chain ID, block number, and marks the certificate ACTIVE.
 ```
 
----
+There is also a legacy `/certificates/issue` path that can issue a PDF first and optionally attempt server-side blockchain issuance when blockchain config and holder wallet data are present.
 
-## API Reference
+## Verification Logic
 
-### Authentication
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/v1/auth/register` | Public | Register new account |
-| POST | `/api/v1/auth/login` | Public | Login, set JWT cookie |
-| POST | `/api/v1/auth/logout` | Public | Clear cookie |
-| GET | `/api/v1/auth/me` | Any | Current user profile |
-| PATCH | `/api/v1/auth/wallet` | Any | Link/unlink wallet address |
+The upload verification endpoint accepts PDFs and images.
 
-### Certificates
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/v1/certificates/:certId` | Public | Lookup by cert ID |
-| POST | `/api/v1/certificates/prepare-issuance` | UNIVERSITY | Phase 1 — generate PDF |
-| POST | `/api/v1/certificates/finalize-issuance` | UNIVERSITY | Phase 2 — confirm tx |
-| POST | `/api/v1/certificates/issue` | UNIVERSITY | Legacy single-step issue |
-| GET | `/api/v1/certificates/my-certificates` | HOLDER | Own certificates |
-| GET | `/api/v1/certificates/issued` | UNIVERSITY | Issued by this university |
-| GET | `/api/v1/certificates/file/:certId` | Authenticated | Download PDF |
-| PATCH | `/api/v1/certificates/:id/revoke` | UNIVERSITY / ADMIN | Revoke |
-
-### Verification (Public)
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/v1/verify/upload` | Public | Upload PDF, get VALID / TAMPERED / REVOKED |
-
-### Blockchain
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/v1/blockchain/status` | Authenticated | Node + contract health |
-| GET | `/api/v1/blockchain/verify/:credId` | Authenticated | On-chain lookup |
-
-### Analytics
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/v1/analytics/university` | UNIVERSITY | Own stats |
-| GET | `/api/v1/analytics/admin` | ADMIN | System-wide stats |
-
-### Health
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/health` | API status |
-| GET | `/api/v1/health/db` | Database connectivity |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ (Node 25 is supported for the frontend; use Node 18/20 for Hardhat)
-- MetaMask browser extension
-- A Neon PostgreSQL database (free tier works)
-
-### 1 — Clone and install
-
-```bash
-git clone https://github.com/your-username/CredentiaX.git
-cd CredentiaX
-npm run install:all
+```text
+1. Extract fields with Gemini.
+2. If Gemini fails, fall back to pdf-parse for PDFs or Tesseract OCR for images.
+3. Decode QR URL when possible and parse the certificate ID.
+4. Fall back to visible certificate ID, manual hint, or filename.
+5. Look up the certificate in PostgreSQL.
+6. Compare registry values against extracted document values:
+   certificate ID, title, course, holder, USN, CGPA, issued by.
+7. Return VALID, TAMPERED, REVOKED, or NOT_FOUND and write a verification log when applicable.
 ```
 
-### 2 — Configure environment variables
+## Environment Variables
 
-**`backend/.env`**
+Create `backend/.env`:
+
 ```env
 PORT=3001
 NODE_ENV=development
 CLIENT_ORIGIN=http://localhost:5173
 APP_URL=http://127.0.0.1:5173
 
-DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
 
-JWT_SECRET="your-secret-at-least-32-chars"
-JWT_EXPIRES_IN="7d"
+JWT_SECRET=replace-with-a-long-random-secret
+JWT_EXPIRES_IN=7d
 
-# Local Hardhat (development)
-POLYGON_AMOY_RPC_URL=https://rpc-amoy.polygon.technology
-PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000001
-CONTRACT_ADDRESS=<deployed address — see step 4>
+# Required for Gemini-first upload verification.
+# Without it, verification falls back to local PDF/OCR extraction.
+GEMINI_API_KEY=your-gemini-api-key
+
+# Blockchain configuration.
+# For local Hardhat, use http://127.0.0.1:8545 as the RPC URL.
+POLYGON_AMOY_RPC_URL=http://127.0.0.1:8545
+PRIVATE_KEY=optional-server-wallet-private-key
+CONTRACT_ADDRESS=deployed-contract-address
 CHAIN_ID=31337
 ```
 
-**`frontend/.env`**
+Create `frontend/.env`:
+
 ```env
-VITE_API_BASE_URL=http://localhost:3001/api/v1
-VITE_APP_NAME=CredentiaX
-VITE_CONTRACT_ADDRESS=<deployed address — see step 4>
+VITE_CONTRACT_ADDRESS=deployed-contract-address
 VITE_CHAIN_ID=31337
 ```
 
-### 3 — Run the database migration
+The frontend API client uses `baseURL: /api/v1`; Vite proxies `/api` to `http://localhost:3001` during development.
+
+## Local Setup
+
+Install dependencies:
+
+```bash
+npm run install:all
+```
+
+Prepare the database:
 
 ```bash
 cd backend
-npx prisma migrate deploy
-npx prisma generate
+npm run db:generate
+npm run db:migrate
 ```
 
-### 4 — Start the local blockchain and deploy the contract
+Start a local blockchain:
 
 ```bash
-# Terminal 1 — Hardhat node
 cd smart-contracts
-npx hardhat node --hostname 127.0.0.1
-
-# Terminal 2 — Deploy contract (copy the printed address into both .env files)
-npx hardhat run scripts/deploy.js --network localhost
+npm run node
 ```
 
-### 5 — Start backend and frontend
+Deploy the contract in another terminal:
 
 ```bash
-# Terminal 3
-npm run backend        # Express on http://localhost:3001
-
-# Terminal 4
-npm run frontend       # Vite on http://127.0.0.1:5173
+cd smart-contracts
+npm run deploy:local
 ```
 
-### 6 — Configure MetaMask
+Copy the printed contract address into `backend/.env` and `frontend/.env`.
 
-1. Add network: **Hardhat Local** — RPC `http://127.0.0.1:8545`, Chain ID `31337`
-2. Import a test account using one of the private keys printed by `hardhat node`
-3. Connect the wallet from the University dashboard
-
----
-
-## Verification Flow — End to End
-
-```
-1. University issues certificate  →  PDF downloaded with QR code
-2. Student shares PDF / prints it
-3. Verifier opens /verify page     OR   Verifier dashboard → "Open QR Scanner"
-4. Camera scans QR  ──────────────────────────────────┐
-                                                       │
-   OR manually types CERT-YYYY-NNNNNN                  │
-                                                       ▼
-5. Frontend calls GET /api/v1/certificates/:certId
-6. Result card shows:
-     ✅ VALID      — green, blockchain proof panel visible
-     🚫 REVOKED    — amber, revocation details shown
-     ❌ NOT_FOUND  — grey, no record in registry
-7. Blockchain proof panel:
-     TX Hash · Issuer Wallet · Block # · Chain ID · "Stored On-Chain" badge
-```
-
-For tamper detection, the verifier uploads the PDF on the "Upload PDF" tab.  
-The backend recomputes the SHA-256 hash and compares it character-by-character with the stored hash, highlighting any discrepancies inline.
-
----
-
-## Roles
-
-| Role | Can do |
-|------|--------|
-| **HOLDER** | View & download own certificates |
-| **UNIVERSITY** | Create holders, issue & revoke certificates, view analytics |
-| **VERIFIER** | Scan QR codes, look up certificates, verify PDFs |
-| **ADMIN** | All of the above + system-wide analytics, user management |
-
----
-
-## Deploying to Polygon Amoy Testnet
-
-1. Fund a wallet with MATIC from the [Amoy faucet](https://faucet.polygon.technology)
-2. Export the private key and set it in `smart-contracts/.env`
-3. Deploy:
-   ```bash
-   cd smart-contracts
-   npx hardhat run scripts/deploy.js --network amoy
-   ```
-4. Update `backend/.env`:
-   ```env
-   CONTRACT_ADDRESS=<amoy address>
-   CHAIN_ID=80002
-   ```
-5. Update `frontend/.env`:
-   ```env
-   VITE_CONTRACT_ADDRESS=<amoy address>
-   VITE_CHAIN_ID=80002
-   ```
-6. MetaMask will switch to **Polygon Amoy** automatically when connecting
-
----
-
-## Security Notes
-
-- JWTs are stored in `httpOnly`, `sameSite: lax` cookies — never accessible from JavaScript
-- PDF hashes are computed server-side at issuance time — the client cannot tamper with the reference hash
-- QR payloads are sanitised: only `http:` / `https:` URIs are accepted, `javascript:` and `data:` are always rejected, payload length is capped at 512 characters
-- The smart contract stores hashes immutably — on-chain records cannot be altered after issuance
-- Camera stream is fully stopped and released on modal close — no ghost streams
-
----
-
-## Scripts Reference
+Start the backend from the project root:
 
 ```bash
-# Root
-npm run frontend          # Start frontend dev server
-npm run backend           # Start backend dev server
-npm run contracts:compile # Compile Solidity
-npm run contracts:test    # Run Hardhat tests
-npm run contracts:node    # Start local Hardhat node
-npm run install:all       # Install all workspace deps
+cd ..
+npm run backend
+```
 
-# Backend (cd backend)
-npm run dev               # nodemon
-npm run db:migrate        # Run Prisma migrations
-npm run db:studio         # Prisma Studio GUI
+Start the frontend from the project root in another terminal:
 
-# Smart Contracts (cd smart-contracts)
-npx hardhat compile
-npx hardhat test
-npx hardhat run scripts/deploy.js --network localhost
+```bash
+npm run frontend
+```
+
+Open the app at:
+
+```text
+http://127.0.0.1:5173
+```
+
+## MetaMask Local Network
+
+For local development, add this network to MetaMask:
+
+| Field | Value |
+| --- | --- |
+| Network name | Hardhat Local |
+| RPC URL | `http://127.0.0.1:8545` |
+| Chain ID | `31337` |
+| Currency | `ETH` |
+
+Import one of the private keys printed by `hardhat node`, then connect the wallet from the app.
+
+## Polygon Amoy Deployment
+
+The Hardhat project includes an `amoy` network. Set `POLYGON_AMOY_RPC_URL` and `PRIVATE_KEY`, then deploy:
+
+```bash
+cd smart-contracts
 npx hardhat run scripts/deploy.js --network amoy
 ```
 
----
+For Amoy, use:
 
-## License
+```env
+CHAIN_ID=80002
+VITE_CHAIN_ID=80002
+```
 
-MIT — see [LICENSE](LICENSE) for details.
+and set both backend and frontend contract address variables to the deployed Amoy contract address.
 
----
+## Scripts
 
-<div align="center">
-  Built with React · Express · Solidity · Hardhat · Prisma · Neon PostgreSQL
-</div>
+Root scripts:
+
+```bash
+npm run install:all          # Install frontend, backend, and smart-contract deps
+npm run frontend             # Start Vite dev server
+npm run backend              # Start Express API with nodemon
+npm run contracts:compile    # Compile contracts
+npm run contracts:test       # Run Hardhat tests
+npm run contracts:node       # Start local Hardhat node
+```
+
+Backend scripts:
+
+```bash
+npm run dev
+npm run start
+npm run db:migrate
+npm run db:generate
+npm run db:studio
+npm run db:push
+npm run db:reset
+```
+
+Frontend scripts:
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
+
+Smart-contract scripts:
+
+```bash
+npm run compile
+npm run test
+npm run node
+npm run deploy:local
+npm run deploy:sepolia
+npm run clean
+```
+
+## Notes and Current Caveats
+
+- The repository has several extra notes and debugging files such as `QUICK_START.md`, `API_CERTIFICATE_ENDPOINTS.md`, `DEBUGGING_GUIDE.md`, and implementation summaries.
+- `backend/uploads/` contains generated files and should be treated as runtime storage.
+- `smart-contracts/artifacts/` and `cache/` are generated by Hardhat.
+- The root `package.json` is marked `private` and currently uses the `ISC` license field.
+- The QR generation code embeds `/verify/<certificateId>`, but the current React app defines `/verify` as a protected upload verifier page.

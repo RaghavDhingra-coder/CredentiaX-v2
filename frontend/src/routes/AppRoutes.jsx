@@ -32,8 +32,15 @@ export default function AppRoutes() {
       {/* Unauthorized page */}
       <Route path="/unauthorized" element={<Unauthorized />} />
 
-      {/* Public certificate verification (linked from QR codes on PDFs) */}
-      <Route path="/verify/:certId" element={<VerifyCertificate />} />
+      {/* Protected certificate verification — accessible from verifier dashboard only */}
+      <Route
+        path="/verify"
+        element={
+          <ProtectedRoute allowedRoles={['VERIFIER', 'ADMIN']}>
+            <VerifyCertificate />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected pages with nav/footer layout */}
       <Route element={<MainLayout />}>

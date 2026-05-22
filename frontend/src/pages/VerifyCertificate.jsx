@@ -1,9 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../services/api.js'
-
-const QRScanner = lazy(() => import('../components/QRScanner.jsx'))
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -59,23 +57,6 @@ function XIcon({ className }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  )
-}
-
-function SearchIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803 7.5 7.5 0 0016.803 15.803z" />
-    </svg>
-  )
-}
-
-function CameraIcon({ className }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
     </svg>
   )
 }
@@ -211,7 +192,7 @@ const STATUS_CONFIG = {
 
 // ─── Shared result card ───────────────────────────────────────────────────────
 
-function ResultCard({ result, mode, onReset }) {
+function ResultCard({ result, onReset }) {
   const cfg = STATUS_CONFIG[result.status] ?? STATUS_CONFIG.NOT_FOUND
   const cert = result.certificate
 
@@ -313,8 +294,8 @@ function ResultCard({ result, mode, onReset }) {
         </div>
       )}
 
-      {/* Field comparison panel (upload mode only) */}
-      {mode === 'upload' && result.fieldResults && result.fieldResults.length > 0 && (
+      {/* Field comparison panel */}
+      {result.fieldResults && result.fieldResults.length > 0 && (
         <div className="px-5 py-4 border-t border-slate-800 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
@@ -446,7 +427,7 @@ function DropZone({ file, isDragging, onDrop, onDragOver, onDragLeave, onFileCha
             <div className="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
               <UploadIcon className="w-6 h-6 text-indigo-400 animate-bounce" />
             </div>
-            <p className="text-indigo-300 font-medium text-sm">Drop PDF here</p>
+            <p className="text-indigo-300 font-medium text-sm">Drop file here</p>
           </>
         ) : (
           <>
@@ -458,7 +439,7 @@ function DropZone({ file, isDragging, onDrop, onDragOver, onDragLeave, onFileCha
                 Drop a file here, or{' '}
                 <span className="text-indigo-400 hover:text-indigo-300 transition-colors">browse</span>
               </p>
-              <p className="text-xs text-slate-500 mt-1">PDF, PNG, JPG, WEBP · Max 15 MB</p>
+              <p className="text-xs text-slate-500 mt-1">PDF, PNG, JPEG · Max 15 MB</p>
             </div>
           </>
         )}
@@ -481,52 +462,8 @@ function Spinner({ text }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function VerifyCertificate() {
-  const { certId: urlCertId } = useParams()
-
-  // Tab state — when URL has a certId default to ID tab, else upload tab
-  const [activeTab, setActiveTab] = useState(urlCertId ? 'id' : 'upload')
-
-  // ── ID-lookup tab ──────────────────────────────────────────────────────────
-  const [idInput,  setIdInput]  = useState(urlCertId || '')
-  const [idResult, setIdResult] = useState(null)
-  const [idLoading, setIdLoading] = useState(false)
-
-  const fetchById = useCallback(async (certId) => {
-    if (!certId?.trim()) return
-    setIdLoading(true)
-    setIdResult(null)
-    try {
-      const { data } = await api.get(`/certificates/${certId.trim()}`)
-      const cert = data.data.certificate
-      setIdResult({
-        status: cert.isRevoked ? 'REVOKED' : 'VALID',
-        certificate: cert,
-      })
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setIdResult({ status: 'NOT_FOUND', certificate: null })
-      } else {
-        toast.error('Verification request failed. Please try again.')
-      }
-    } finally {
-      setIdLoading(false)
-    }
-  }, [])
-
-  // Auto-fetch when certId is in the URL (QR scan flow)
-  useEffect(() => {
-    if (urlCertId) fetchById(urlCertId)
-  }, [urlCertId, fetchById])
-
-  function handleIdSubmit(e) {
-    e.preventDefault()
-    fetchById(idInput)
-  }
-
-  // ── PDF upload tab ─────────────────────────────────────────────────────────
   const [file,          setFile]          = useState(null)
   const [isDragging,    setIsDragging]    = useState(false)
-  const [uploadCertId,  setUploadCertId]  = useState(urlCertId || '')
   const [uploadResult,  setUploadResult]  = useState(null)
   const [uploadLoading, setUploadLoading] = useState(false)
   const fileInputRef = useRef(null)
@@ -539,6 +476,7 @@ export default function VerifyCertificate() {
     e.preventDefault()
     setIsDragging(false)
   }
+
   const ACCEPTED_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp'])
   const ACCEPTED_EXTS  = new Set(['pdf', 'png', 'jpg', 'jpeg', 'webp'])
 
@@ -549,7 +487,7 @@ export default function VerifyCertificate() {
     if (!f) return
     const ext = f.name.toLowerCase().split('.').pop()
     if (!ACCEPTED_TYPES.has(f.type) && !ACCEPTED_EXTS.has(ext)) {
-      toast.error('Please drop a PDF or image file (PNG, JPG, WEBP)')
+      toast.error('Please drop a PDF or image file (PNG, JPG, JPEG)')
       return
     }
     if (f.size > 15 * 1024 * 1024) {
@@ -559,11 +497,13 @@ export default function VerifyCertificate() {
     setFile(f)
     setUploadResult(null)
   }
+
   function onFileChange(e) {
     const f = e.target.files[0]
     if (f) { setFile(f); setUploadResult(null) }
     e.target.value = ''
   }
+
   function clearFile() {
     setFile(null)
     setUploadResult(null)
@@ -571,14 +511,13 @@ export default function VerifyCertificate() {
 
   async function handleUploadSubmit(e) {
     e.preventDefault()
-    if (!file) { toast.error('Please select a PDF file first'); return }
+    if (!file) { toast.error('Please select a certificate file first'); return }
 
     setUploadLoading(true)
     setUploadResult(null)
 
     const formData = new FormData()
     formData.append('pdf', file)
-    if (uploadCertId.trim()) formData.append('certificateId', uploadCertId.trim())
 
     try {
       const { data } = await api.post('/verify/upload', formData)
@@ -591,32 +530,13 @@ export default function VerifyCertificate() {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-
-  // ── QR Scanner tab ─────────────────────────────────────────────────────────
-  const [showQR, setShowQR] = useState(false)
-
-  function onQRScan(scannedCertId) {
-    setShowQR(false)
-    setActiveTab('id')
-    setIdInput(scannedCertId)
-    toast.success(`QR scanned: ${scannedCertId}`)
-    fetchById(scannedCertId)
-  }
-
-  const tabs = [
-    { id: 'id',     label: 'By Certificate ID' },
-    { id: 'upload', label: 'Upload PDF'          },
-    { id: 'scan',   label: 'Scan QR'             },
-  ]
-
   return (
     <div
       className="min-h-screen w-full flex flex-col items-center px-4 py-10"
       style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 25%, rgba(99,102,241,0.10) 0%, transparent 65%), #0f172a' }}
     >
       {/* Logo */}
-      <Link to="/" className="inline-flex items-center gap-2.5 mb-8 group">
+      <Link to="/dashboard" className="inline-flex items-center gap-2.5 mb-8 group">
         <div className="w-9 h-9 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/30 group-hover:bg-indigo-400 transition-colors">
           <ShieldCheckIcon className="w-5 h-5 text-white" />
         </div>
@@ -625,192 +545,66 @@ export default function VerifyCertificate() {
 
       {/* Hero */}
       <div className="text-center mb-8 max-w-lg">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Credential Verification</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">Verify Certificate</h1>
         <p className="text-slate-400 text-sm">
-          Verify the authenticity of credentials issued on the CredentiaX network.
-          Upload any format — PDF, screenshot, or photo — and we compare the actual
-          content fields against the blockchain-stored record.
+          Upload a certificate as a PDF, PNG, or JPEG. The system automatically extracts the
+          embedded QR code, looks up the registry record, and compares the certificate content
+          against the blockchain-stored data to detect tampering.
         </p>
       </div>
 
       {/* Card container */}
       <div className="w-full max-w-xl">
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 rounded-xl bg-slate-800/60 border border-slate-700/60 mb-5">
-          {tabs.map((tab) => (
+        {/* Upload card */}
+        <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-white mb-1">Certificate Integrity Check</h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Upload the certificate file. We scan the embedded QR code to retrieve the authoritative
+            registry record, then compare key fields against what is printed on the certificate.
+            Any mismatch flags tampering.
+          </p>
+
+          <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4">
+            <DropZone
+              file={file}
+              isDragging={isDragging}
+              onDrop={onDrop}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onFileChange={onFileChange}
+              onClear={clearFile}
+              fileInputRef={fileInputRef}
+            />
+
             <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
-                activeTab === tab.id
-                  ? 'bg-slate-700 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              type="submit"
+              disabled={uploadLoading || !file}
+              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
             >
-              {tab.label}
+              {uploadLoading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Verifying…
+                </>
+              ) : (
+                <>
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  Verify Certificate
+                </>
+              )}
             </button>
-          ))}
+          </form>
         </div>
 
-        {/* ── Tab 1: By Certificate ID ──────────────────────────────────────── */}
-        {activeTab === 'id' && (
-          <div className="flex flex-col gap-4">
-            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5">
-              <h2 className="text-sm font-semibold text-white mb-3">Certificate ID Lookup</h2>
-              <form onSubmit={handleIdSubmit} className="flex gap-2">
-                <div className="relative flex-1">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                    <SearchIcon className="w-4 h-4 text-slate-400" />
-                  </div>
-                  <input
-                    type="text"
-                    value={idInput}
-                    onChange={(e) => { setIdInput(e.target.value); setIdResult(null) }}
-                    placeholder="CERT-2026-000001"
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-800 border border-slate-600 text-white placeholder-slate-500 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={idLoading || !idInput.trim()}
-                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all whitespace-nowrap"
-                >
-                  {idLoading ? 'Checking…' : 'Verify'}
-                </button>
-              </form>
+        {uploadLoading && <Spinner text="Scanning QR code and comparing certificate fields…" />}
 
-              {urlCertId && !idResult && !idLoading && (
-                <p className="text-xs text-slate-500 mt-2">
-                  Looking up <span className="font-mono text-indigo-400">{urlCertId}</span> from QR code…
-                </p>
-              )}
-            </div>
-
-            {idLoading && <Spinner text="Checking certificate registry…" />}
-
-            {idResult && (
-              <ResultCard
-                result={idResult}
-                mode="id"
-                onReset={() => { setIdResult(null); setIdInput('') }}
-              />
-            )}
-          </div>
-        )}
-
-        {/* ── Tab 2: PDF Upload ─────────────────────────────────────────────── */}
-        {activeTab === 'upload' && (
-          <div className="flex flex-col gap-4">
-            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-5">
-              <h2 className="text-sm font-semibold text-white mb-1">Certificate Integrity Verification</h2>
-              <p className="text-xs text-slate-500 mb-4">
-                Upload the certificate as a PDF or image (PNG, JPG, screenshot). We scan the embedded
-                QR code to look up the authoritative registry record, then compare 6 key fields against
-                what is actually printed on the certificate. Any mismatch flags tampering.
-              </p>
-
-              <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4">
-                <DropZone
-                  file={file}
-                  isDragging={isDragging}
-                  onDrop={onDrop}
-                  onDragOver={onDragOver}
-                  onDragLeave={onDragLeave}
-                  onFileChange={onFileChange}
-                  onClear={clearFile}
-                  fileInputRef={fileInputRef}
-                />
-
-                {/* Optional cert ID hint */}
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                    Certificate ID{' '}
-                    <span className="text-slate-600 font-normal">(optional — auto-detected from QR code or file text)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadCertId}
-                    onChange={(e) => setUploadCertId(e.target.value)}
-                    placeholder="CERT-2026-000001"
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-800 border border-slate-600 text-white placeholder-slate-500 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-slate-600 mt-1">
-                    Auto-detected from filename if not provided.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={uploadLoading || !file}
-                  className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
-                >
-                  {uploadLoading ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Verifying…
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheckIcon className="w-4 h-4" />
-                      Verify Certificate
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
-
-            {uploadLoading && <Spinner text="Scanning QR code and comparing certificate fields…" />}
-
-            {uploadResult && (
-              <ResultCard
-                result={uploadResult}
-                mode="upload"
-                onReset={() => { setUploadResult(null); clearFile(); setUploadCertId(urlCertId || '') }}
-              />
-            )}
-          </div>
-        )}
-
-        {/* ── Tab 3: Scan QR ──────────────────────────────────────────────────── */}
-        {activeTab === 'scan' && (
-          <div className="flex flex-col gap-4">
-            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-6 flex flex-col items-center text-center gap-5">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                <CameraIcon className="w-8 h-8 text-indigo-400" />
-              </div>
-              <div>
-                <p className="text-white font-semibold text-sm mb-1">Camera QR Scanner</p>
-                <p className="text-slate-400 text-xs leading-relaxed max-w-xs">
-                  Open the camera scanner, point it at the QR code printed on any CredentiaX certificate,
-                  and the credential will be verified instantly.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowQR(true)}
-                className="w-full max-w-xs py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
-              >
-                <CameraIcon className="w-4 h-4" />
-                Open QR Scanner
-              </button>
-              <div className="w-full border-t border-slate-800 pt-4 text-left space-y-2">
-                <p className="text-xs font-medium text-slate-400">What you need:</p>
-                {['A printed certificate OR certificate PDF open on another screen', 'Camera permission in your browser', 'Good lighting for best scan results'].map((tip, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <p className="text-xs text-slate-500">{tip}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Show result here if scanned from this tab */}
-            {idLoading && <Spinner text="Verifying scanned certificate…" />}
-            {idResult && activeTab === 'scan' && (
-              <ResultCard result={idResult} mode="id" onReset={() => { setIdResult(null); setIdInput('') }} />
-            )}
+        {uploadResult && (
+          <div className="mt-4">
+            <ResultCard
+              result={uploadResult}
+              onReset={() => { setUploadResult(null); clearFile() }}
+            />
           </div>
         )}
 
@@ -823,13 +617,6 @@ export default function VerifyCertificate() {
           · Tamper-proof credential registry on Polygon Amoy
         </p>
       </div>
-
-      {/* QR Scanner modal */}
-      {showQR && (
-        <Suspense fallback={null}>
-          <QRScanner onScan={onQRScan} onClose={() => setShowQR(false)} />
-        </Suspense>
-      )}
     </div>
   )
 }
