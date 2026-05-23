@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import prisma from '../config/prisma.js'
 import { config } from '../config/env.js'
 import { AppError } from '../utils/AppError.js'
+import { institutionVerificationService } from './institutionVerificationService.js'
 
 const SAFE_USER_SELECT = {
   id: true,
@@ -52,7 +53,7 @@ export const authService = {
     }
 
     const token = signToken({ id: safeUser.id, role: safeUser.role })
-    return { user: safeUser, token }
+    return { user: await institutionVerificationService.enrichUser(safeUser), token }
   },
 
   verifyToken(token) {
@@ -70,15 +71,41 @@ export const authService = {
       select: SAFE_USER_SELECT,
     })
     if (!user) throw new AppError('User not found', 404)
-    return user
+    return institutionVerificationService.enrichUser(user)
   },
 
   async updateWallet(id, walletAddress) {
+    const current = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true, walletAddress: true },
+    })
+    const nextWallet = walletAddress ? walletAddress.toLowerCase() : null
+    const walletChanged = current?.walletAddress?.toLowerCase() !== nextWallet
+
+    // Skip write if nothing changed
+    if (!walletChanged) {
+      const user = await prisma.user.findUnique({ where: { id }, select: SAFE_USER_SELECT })
+      return institutionVerificationService.enrichUser(user)
+    }
+
+    // Check if the new wallet is already claimed by another user (case-insensitive)
+    if (nextWallet) {
+      const [existing] = await prisma.$queryRaw`
+        SELECT id FROM users WHERE LOWER("walletAddress") = ${nextWallet} AND id != ${id} LIMIT 1
+      `
+      if (existing) {
+        throw new AppError('This wallet address is already registered to another account', 409)
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id },
-      data: { walletAddress: walletAddress ?? null },
+      data: { walletAddress: nextWallet },
       select: SAFE_USER_SELECT,
     })
-    return user
+    if (current?.role === 'UNIVERSITY') {
+      await institutionVerificationService.resetForWalletChange(id)
+    }
+    return institutionVerificationService.enrichUser(user)
   },
 }

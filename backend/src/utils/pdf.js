@@ -37,6 +37,7 @@ export async function generateCertificatePDF({
   issueDate,
   certificateId,
   issuerWalletAddress,
+  issuerIsVerified,
   qrBuffer,
 }) {
   return new Promise((resolve, reject) => {
@@ -51,8 +52,6 @@ export async function generateCertificatePDF({
 
     // ── Outer border ─────────────────────────────────────────────────────────
     doc.rect(18, 18, W - 36, H - 36).lineWidth(3).strokeColor(C.borderOuter).stroke()
-    doc.rect(26, 26, W - 52, H - 52).lineWidth(0.75).strokeColor(C.borderInner).stroke()
-
     // ── Corner ornaments ─────────────────────────────────────────────────────
     const corners = [[32, 32], [W - 32, 32], [32, H - 32], [W - 32, H - 32]]
     corners.forEach(([cx, cy]) => {
@@ -66,7 +65,7 @@ export async function generateCertificatePDF({
     centeredText(doc, universityName.toUpperCase(), 36)
 
     doc.font('Helvetica').fontSize(9).fillColor(C.headerSub)
-    centeredText(doc, '✦  C E R T I F I C A T E  O F  C O M P L E T I O N  ✦', 68)
+    centeredText(doc, '*  C E R T I F I C A T E  O F  C O M P L E T I O N  *', 68)
 
     // ── Body ─────────────────────────────────────────────────────────────────
 
@@ -152,11 +151,23 @@ export async function generateCertificatePDF({
       doc.text(issuerWalletAddress, W / 2 - 130, bottomTop + 14, { width: 260 })
     }
 
+    if (issuerIsVerified) {
+      doc.roundedRect(W / 2 - 75, bottomTop + 42, 150, 20, 5)
+        .fillAndStroke('#ecfdf5', '#10b981')
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#047857')
+      doc.text('VERIFIED INSTITUTION', W / 2 - 75, bottomTop + 48, { width: 150, align: 'center' })
+    } else {
+      doc.roundedRect(W / 2 - 75, bottomTop + 42, 150, 20, 5)
+        .fillAndStroke('#fef9c3', '#ca8a04')
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#854d0e')
+      doc.text('UNVERIFIED INSTITUTION', W / 2 - 75, bottomTop + 48, { width: 150, align: 'center' })
+    }
+
     // Centre column — seal line
-    doc.moveTo(W / 2 - 60, bottomTop + 80).lineTo(W / 2 + 60, bottomTop + 80)
+    doc.moveTo(W / 2 - 60, bottomTop + 96).lineTo(W / 2 + 60, bottomTop + 96)
       .lineWidth(0.5).strokeColor(C.divider).stroke()
     doc.font('Helvetica').fontSize(8).fillColor(C.muted)
-    doc.text('Authorised Signatory', W / 2 - 60, bottomTop + 83, { width: 120, align: 'center' })
+    doc.text('Authorised Signatory', W / 2 - 60, bottomTop + 99, { width: 120, align: 'center' })
 
     // Right column — QR code
     const qrSize = 108
