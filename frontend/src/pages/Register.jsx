@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useWallet } from '../context/WalletContext.jsx'
 
 const ROLES = [
   { value: 'UNIVERSITY', label: 'Institution / University', desc: 'Issue credentials to holders' },
@@ -26,6 +27,7 @@ function CheckIcon() {
 
 export default function Register() {
   const { register } = useAuth()
+  const { connect, isInstalled } = useWallet()
   const navigate     = useNavigate()
 
   const [form, setForm]      = useState({ name: '', email: '', password: '', role: 'UNIVERSITY' })
@@ -43,6 +45,9 @@ export default function Register() {
     try {
       await register(form)
       toast.success('Account created! Welcome to CredentiaX.')
+      if (form.role === 'UNIVERSITY' && isInstalled) {
+        try { await connect() } catch { /* non-blocking */ }
+      }
       navigate('/dashboard', { replace: true })
     } catch (err) {
       const data = err.response?.data

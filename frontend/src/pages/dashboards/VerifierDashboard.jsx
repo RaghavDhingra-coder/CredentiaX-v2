@@ -114,6 +114,15 @@ function chainLabel(chainId) {
   return `Chain ${id}`
 }
 
+function issuerIsVerified(cert) {
+  const approvedWallet = cert?.issuedByUser?.walletAddress?.toLowerCase()
+  const certificateWallet = cert?.issuerWalletAddress?.toLowerCase()
+  return cert?.issuedByUser?.verificationStatus === 'VERIFIED'
+    && approvedWallet
+    && certificateWallet
+    && approvedWallet === certificateWallet
+}
+
 function ResultCard({ result, onReset }) {
   const status = result.found ? (result.cert?.isRevoked ? 'REVOKED' : 'VALID') : 'NOT_FOUND'
   const cfg  = STATUS_CONFIG[status]
@@ -147,7 +156,18 @@ function ResultCard({ result, onReset }) {
           <Row label="Title">{cert.title}</Row>
           <Row label="Course">{cert.course}</Row>
           <Row label="Holder">{cert.holder?.name} <span className="text-slate-500">({cert.holder?.email})</span></Row>
-          <Row label="Issued by">{cert.issuedByUser?.name}</Row>
+          <Row label="Issued by">
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              {cert.issuedByUser?.name}
+              <span className={`inline-flex text-xs px-2 py-0.5 rounded-full border ${
+                issuerIsVerified(cert)
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}>
+                {issuerIsVerified(cert) ? 'Verified Institution' : 'Unverified Institution'}
+              </span>
+            </span>
+          </Row>
           <Row label="Issue Date">
             {new Date(cert.issueDate || cert.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
           </Row>

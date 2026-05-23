@@ -766,13 +766,18 @@ function truncateAddress(addr) {
 
 export default function UniversityDashboard() {
   const { user }                    = useAuth()
-  const { address, network, isCorrectNetwork, connecting, isInstalled, connect, switchToAmoy } = useWallet()
+  const { address, network, isCorrectNetwork, connecting, isInstalled, connect, switchAccount, switchToAmoy } = useWallet()
   const [holders, setHolders]           = useState([])
   const [loadingH, setLoadingH]         = useState(true)
   const [certificates, setCertificates] = useState([])
   const [loadingC, setLoadingC]         = useState(true)
   const [showModal, setShowModal]       = useState(false)
   const [showIssueModal, setShowIssue]  = useState(false)
+  const [verification, setVerification] = useState(() => ({
+    status: user?.verificationStatus || 'UNVERIFIED',
+    note: user?.verificationNote || '',
+  }))
+  const [requestingVerification, setRequestingVerification] = useState(false)
 
   const fetchHolders = useCallback(async () => {
     setLoadingH(true)
@@ -800,6 +805,31 @@ export default function UniversityDashboard() {
 
   useEffect(() => { fetchHolders() }, [fetchHolders])
   useEffect(() => { fetchCertificates() }, [fetchCertificates])
+  useEffect(() => {
+    setVerification({
+      status: user?.verificationStatus || 'UNVERIFIED',
+      note: user?.verificationNote || '',
+    })
+  }, [user])
+
+  async function requestVerification() {
+    setRequestingVerification(true)
+    try {
+      // Ensure the current wallet is persisted before checking on the backend
+      if (address) await api.patch('/auth/wallet', { walletAddress: address })
+      const { data } = await api.post('/institution-verification/request')
+      const institution = data.data.institution
+      setVerification({
+        status: institution.verificationStatus,
+        note: institution.verificationNote || '',
+      })
+      toast.success('Verification request submitted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not submit verification request')
+    } finally {
+      setRequestingVerification(false)
+    }
+  }
 
   function onHolderCreated(holder) {
     setHolders((prev) => [holder, ...prev])
@@ -1106,9 +1136,52 @@ export default function UniversityDashboard() {
                   </div>
                   <div className="flex items-center justify-between text-xs mt-1.5">
                     <span className="text-slate-500">Status</span>
-                    <span className="text-amber-400 font-medium">Pending Verification</span>
+                    <span className={`font-medium ${
+                      verification.status === 'VERIFIED'
+                        ? 'text-emerald-400'
+                        : verification.status === 'PENDING'
+                        ? 'text-sky-400'
+                        : verification.status === 'REJECTED'
+                        ? 'text-red-400'
+                        : 'text-amber-400'
+                    }`}>
+                      {verification.status === 'VERIFIED'
+                        ? 'Verified Institution'
+                        : verification.status === 'PENDING'
+                        ? 'Review Pending'
+                        : verification.status === 'REJECTED'
+                        ? 'Rejected'
+                        : 'Unverified'}
+                    </span>
                   </div>
                 </div>
+
+                {/* Inline verification action */}
+                {verification.status === 'REJECTED' && verification.note && (
+                  <div className="mt-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs">
+                    {verification.note}
+                  </div>
+                )}
+                {verification.status === 'PENDING' && (
+                  <div className="mt-3 px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-300 text-xs text-center">
+                    Verification request under admin review
+                  </div>
+                )}
+                {(verification.status === 'UNVERIFIED' || verification.status === 'REJECTED') && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={requestVerification}
+                      disabled={requestingVerification || !address}
+                      className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                    >
+                      {requestingVerification ? 'Submitting…' : 'Request Verification'}
+                    </button>
+                    {!address && (
+                      <p className="text-xs text-amber-400 text-center">Connect issuer wallet first</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Wallet Connection */}
@@ -1162,6 +1235,16 @@ export default function UniversityDashboard() {
                     )}
 
                     <WalletButton className="w-full justify-center" />
+                    <button
+                      type="button"
+                      onClick={switchAccount}
+                      className="w-full py-2 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-400 hover:text-white text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                      </svg>
+                      Switch Account
+                    </button>
                   </div>
                 )}
               </div>

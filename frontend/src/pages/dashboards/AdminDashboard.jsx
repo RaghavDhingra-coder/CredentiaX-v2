@@ -5,6 +5,7 @@ import {
   CartesianGrid, Tooltip,
 } from 'recharts'
 import api from '../../services/api.js'
+import toast from 'react-hot-toast'
 
 // ─── Animated counter ─────────────────────────────────────────────────────────
 function useCounter(target, duration = 900) {
@@ -90,12 +91,88 @@ function RecentCertRow({ cert }) {
   )
 }
 
+// ─── Admin panel modal ────────────────────────────────────────────────────────
+const ROLE_COLOR = { ADMIN: 'text-violet-400', UNIVERSITY: 'text-sky-400', HOLDER: 'text-emerald-400', VERIFIER: 'text-amber-400' }
+const VSTATUS_COLOR = { VERIFIED: 'text-emerald-400', PENDING: 'text-sky-400', REJECTED: 'text-red-400', UNVERIFIED: 'text-amber-400' }
+
+function AdminPanel({ type, data, loading, onClose }) {
+  const title = type === 'users' ? 'All Users' : 'All Universities'
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full sm:max-w-2xl bg-slate-900 border border-slate-700/80 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
+          <h2 className="font-semibold text-white text-sm">{title}</h2>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : data.length === 0 ? (
+            <p className="text-center text-slate-500 text-sm py-12">No records found</p>
+          ) : type === 'users' ? (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800/50 border-b border-slate-800">
+                <tr>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Name</th>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Email</th>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Role</th>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Joined</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {data.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-800/40">
+                    <td className="px-5 py-3 text-white font-medium">{u.name}</td>
+                    <td className="px-5 py-3 text-slate-400 text-xs">{u.email}</td>
+                    <td className={`px-5 py-3 text-xs font-medium ${ROLE_COLOR[u.role] ?? 'text-slate-400'}`}>{u.role}</td>
+                    <td className="px-5 py-3 text-xs text-slate-500">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-800/50 border-b border-slate-800">
+                <tr>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Institution</th>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Email</th>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Verification</th>
+                  <th className="px-5 py-3 text-left text-xs text-slate-400 font-medium">Wallet</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {data.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-800/40">
+                    <td className="px-5 py-3 text-white font-medium">{u.name}</td>
+                    <td className="px-5 py-3 text-slate-400 text-xs">{u.email}</td>
+                    <td className={`px-5 py-3 text-xs font-medium ${VSTATUS_COLOR[u.verificationStatus] ?? 'text-slate-400'}`}>
+                      {u.verificationStatus ?? 'UNVERIFIED'}
+                    </td>
+                    <td className="px-5 py-3 font-mono text-xs text-slate-500">
+                      {u.walletAddress ? `${u.walletAddress.slice(0,8)}…${u.walletAddress.slice(-4)}` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 const adminActions = [
-  { label: 'Manage Users',        desc: 'View, edit, or remove user accounts',  color: 'indigo' },
-  { label: 'Manage Universities', desc: 'Verify or suspend institutions',         color: 'sky' },
-  { label: 'Audit Logs',          desc: 'View all system activity',               color: 'violet' },
-  { label: 'System Settings',     desc: 'Configure platform parameters',          color: 'slate' },
+  { label: 'Manage Users',        desc: 'View, edit, or remove user accounts',  color: 'indigo', type: 'users'        },
+  { label: 'Manage Universities', desc: 'Verify or suspend institutions',         color: 'sky',    type: 'universities' },
+  { label: 'Audit Logs',          desc: 'View all system activity',               color: 'violet', type: 'audit'        },
+  { label: 'System Settings',     desc: 'Configure platform parameters',          color: 'slate',  type: 'settings'     },
 ]
 
 const colorMap = {
@@ -109,13 +186,65 @@ export default function AdminDashboard() {
   const { user } = useAuth()
   const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
+  const [verificationRequests, setVerificationRequests] = useState([])
+  const [loadingRequests, setLoadingRequests] = useState(true)
+  const [reviewNotes, setReviewNotes] = useState({})
+  const [reviewingId, setReviewingId] = useState(null)
+  const [activePanel, setActivePanel] = useState(null) // 'users' | 'universities' | null
+  const [panelData, setPanelData]     = useState([])
+  const [panelLoading, setPanelLoading] = useState(false)
 
-  useEffect(() => {
+  function fetchStats() {
     api.get('/analytics/admin')
       .then(({ data }) => setStats(data.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchStats() }, [])
+
+  useEffect(() => {
+    api.get('/institution-verification/requests')
+      .then(({ data }) => setVerificationRequests(data.data.requests))
+      .catch(() => {})
+      .finally(() => setLoadingRequests(false))
   }, [])
+
+  async function openPanel(type) {
+    if (type === 'audit' || type === 'settings') {
+      toast('Coming soon', { icon: '🚧' })
+      return
+    }
+    setActivePanel(type)
+    setPanelLoading(true)
+    setPanelData([])
+    try {
+      const { data } = await api.get('/users')
+      const all = data.data.users
+      setPanelData(type === 'universities' ? all.filter((u) => u.role === 'UNIVERSITY') : all)
+    } catch {
+      toast.error('Failed to load data')
+    } finally {
+      setPanelLoading(false)
+    }
+  }
+
+  async function reviewVerification(request, decision) {
+    setReviewingId(request.id)
+    try {
+      await api.patch(`/institution-verification/requests/${request.id}`, {
+        decision,
+        note: reviewNotes[request.id] || '',
+      })
+      setVerificationRequests((prev) => prev.filter((item) => item.id !== request.id))
+      toast.success(decision === 'APPROVE' ? 'Institution verified' : 'Verification request rejected')
+      fetchStats()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not review verification request')
+    } finally {
+      setReviewingId(null)
+    }
+  }
 
   const s = stats ?? {}
   const gridColor    = '#1e293b'
@@ -128,6 +257,14 @@ export default function AdminDashboard() {
 
   return (
     <div className="w-full">
+      {activePanel && (
+        <AdminPanel
+          type={activePanel}
+          data={panelData}
+          loading={panelLoading}
+          onClose={() => setActivePanel(null)}
+        />
+      )}
       <div className="w-full max-w-6xl mx-auto px-5 sm:px-8 lg:px-12 py-8 sm:py-10">
 
         {/* Header */}
@@ -174,17 +311,82 @@ export default function AdminDashboard() {
                 <h2 className="font-semibold text-white text-sm sm:text-base">Administration</h2>
               </div>
               <div className="p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {adminActions.map(({ label, desc, color }) => (
+                {adminActions.map(({ label, desc, color, type }) => (
                   <button
                     key={label}
                     type="button"
-                    className={`flex flex-col gap-1.5 p-4 rounded-xl border text-left transition-all duration-200 ${colorMap[color]}`}
+                    onClick={() => openPanel(type)}
+                    className={`flex flex-col gap-1.5 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${colorMap[color]}`}
                   >
                     <p className="font-semibold text-sm">{label}</p>
                     <p className="text-xs opacity-70">{desc}</p>
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
+              <div className="px-5 sm:px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold text-white text-sm sm:text-base">Verification Requests</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Approve reviewed institution wallets</p>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                  {verificationRequests.length} pending
+                </span>
+              </div>
+              {loadingRequests ? (
+                <div className="p-5 flex flex-col gap-3">
+                  <Sk className="h-28" />
+                </div>
+              ) : verificationRequests.length === 0 ? (
+                <div className="px-6 py-8 text-center text-sm text-slate-500">No pending requests</div>
+              ) : (
+                <div className="divide-y divide-slate-800">
+                  {verificationRequests.map((request) => (
+                    <div key={request.id} className="p-5 flex flex-col gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">{request.name}</p>
+                          <p className="text-xs text-slate-500">{request.email}</p>
+                        </div>
+                        <span className="text-xs text-slate-500 shrink-0">
+                          {request.verificationRequestedAt ? new Date(request.verificationRequestedAt).toLocaleDateString() : ''}
+                        </span>
+                      </div>
+                      <div className="text-xs">
+                        <p className="text-slate-500 mb-0.5">Wallet address</p>
+                        <p className="font-mono text-slate-300 break-all">{request.walletAddress || '—'}</p>
+                      </div>
+                      <textarea
+                        value={reviewNotes[request.id] || ''}
+                        onChange={(e) => setReviewNotes((prev) => ({ ...prev, [request.id]: e.target.value }))}
+                        rows={2}
+                        placeholder="Rejection note"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={reviewingId === request.id}
+                          onClick={() => reviewVerification(request, 'APPROVE')}
+                          className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reviewingId === request.id}
+                          onClick={() => reviewVerification(request, 'REJECT')}
+                          className="flex-1 py-2 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-300 text-xs font-semibold transition-colors"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Issuance trend chart */}

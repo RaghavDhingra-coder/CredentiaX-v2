@@ -2,35 +2,38 @@
 -- PostgreSQL doesn't support ALTER TYPE ... RENAME VALUE directly,
 -- so we recreate the type.
 
--- Step 1: Add HOLDER to the existing enum (safe, no-op if already exists)
-ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'HOLDER';
-
--- Step 2: Migrate any existing STUDENT rows to HOLDER before removing the value
-UPDATE "users" SET "role" = 'HOLDER'::"Role" WHERE "role" = 'STUDENT'::"Role";
-
--- Step 3: Recreate the Role enum without STUDENT
+-- Step 1: Recreate the Role enum without STUDENT
 --   a) rename current type out of the way
 ALTER TYPE "Role" RENAME TO "Role_old";
 
 --   b) create the canonical type with the final set of values
 CREATE TYPE "Role" AS ENUM ('HOLDER', 'UNIVERSITY', 'ADMIN', 'VERIFIER');
 
---   c) migrate the column to the new type
+--   c) drop the old enum default before converting the column type
+ALTER TABLE "users"
+  ALTER COLUMN "role" DROP DEFAULT;
+
+--   d) migrate the column to the new type, mapping STUDENT rows to HOLDER
 ALTER TABLE "users"
   ALTER COLUMN "role" TYPE "Role"
-    USING "role"::text::"Role";
+    USING (
+      CASE
+        WHEN "role"::text = 'STUDENT' THEN 'HOLDER'
+        ELSE "role"::text
+      END
+    )::"Role";
 
---   d) reset the default
+--   e) reset the default
 ALTER TABLE "users"
   ALTER COLUMN "role" SET DEFAULT 'HOLDER'::"Role";
 
---   e) drop the old type
+--   f) drop the old type
 DROP TYPE "Role_old";
 
--- Step 4: Add createdByUniversityId column (nullable self-referential FK)
+-- Step 2: Add createdByUniversityId column (nullable self-referential FK)
 ALTER TABLE "users" ADD COLUMN "createdByUniversityId" TEXT;
 
--- Step 5: Add the foreign key constraint
+-- Step 3: Add the foreign key constraint
 ALTER TABLE "users"
   ADD CONSTRAINT "users_createdByUniversityId_fkey"
   FOREIGN KEY ("createdByUniversityId")

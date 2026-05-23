@@ -10,6 +10,7 @@ import { blockchainService } from './blockchainService.js'
 import { config } from '../config/env.js'
 import { encodeId, encodeHash, farFutureExpiry, computeMetadataHashes } from '../utils/blockchainPayload.js'
 import { ethers } from 'ethers'
+import { institutionVerificationService } from './institutionVerificationService.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const UPLOADS_DIR = join(__dirname, '../../uploads/certificates')
@@ -43,10 +44,27 @@ const CERT_SELECT_FULL = {
   blockNumber: true,
   createdAt: true,
   holder: { select: { id: true, name: true, email: true, walletAddress: true } },
-  issuedByUser: { select: { id: true, name: true, email: true, walletAddress: true } },
+  issuedByUser: { select: {
+    id: true,
+    name: true,
+    email: true,
+    walletAddress: true,
+  } },
 }
 
 const CERT_SELECT = CERT_SELECT_FULL
+
+async function enrichIssuerVerification(certificate) {
+  if (!certificate?.issuedByUser) return certificate
+  return {
+    ...certificate,
+    issuedByUser: await institutionVerificationService.enrichUser(certificate.issuedByUser),
+  }
+}
+
+async function enrichIssuerVerificationMany(certificates) {
+  return Promise.all(certificates.map(enrichIssuerVerification))
+}
 
 export const certificateService = {
   async issueCertificate({ holderId, issuedByUserId, title, course, usn, cgpa, description, issueDate }) {
@@ -63,6 +81,7 @@ export const certificateService = {
 
     const issuer = await prisma.user.findUnique({ where: { id: issuedByUserId } })
     if (!issuer) throw new AppError('Issuer not found', 404)
+    const issuerIsVerified = await institutionVerificationService.isVerifiedUser(issuer)
 
     const certId = await nextCertificateId()
 
@@ -81,6 +100,7 @@ export const certificateService = {
       issueDate:           new Date(issueDate),
       certificateId:       certId,
       issuerWalletAddress: issuer.walletAddress || null,
+      issuerIsVerified,
       qrBuffer,
     })
 
@@ -138,23 +158,25 @@ export const certificateService = {
       select: CERT_SELECT,
     })
 
-    return { certificate, pdfBuffer, certId }
+    return { certificate: await enrichIssuerVerification(certificate), pdfBuffer, certId }
   },
 
   async findByHolder(holderId) {
-    return prisma.certificate.findMany({
+    const certificates = await prisma.certificate.findMany({
       where:   { holderId },
       orderBy: { createdAt: 'desc' },
       select:  CERT_SELECT,
     })
+    return enrichIssuerVerificationMany(certificates)
   },
 
   async findByIssuer(issuedByUserId) {
-    return prisma.certificate.findMany({
+    const certificates = await prisma.certificate.findMany({
       where:   { issuedByUserId },
       orderBy: { createdAt: 'desc' },
       select:  CERT_SELECT,
     })
+    return enrichIssuerVerificationMany(certificates)
   },
 
   async findByCertificateId(certificateId) {
@@ -163,7 +185,7 @@ export const certificateService = {
       select: CERT_SELECT,
     })
     if (!cert) throw new AppError('Certificate not found', 404)
-    return cert
+    return enrichIssuerVerification(cert)
   },
 
   async findById(id) {
@@ -172,7 +194,7 @@ export const certificateService = {
       select: CERT_SELECT,
     })
     if (!cert) throw new AppError('Certificate not found', 404)
-    return cert
+    return enrichIssuerVerification(cert)
   },
 
   async revoke(id, requestingUserId) {
@@ -181,11 +203,12 @@ export const certificateService = {
     if (cert.issuedByUser.id !== requestingUserId) {
       throw new AppError('Only the issuing university can revoke this certificate', 403)
     }
-    return prisma.certificate.update({
+    const certificate = await prisma.certificate.update({
       where:  { id },
       data:   { isRevoked: true },
       select: CERT_SELECT,
     })
+    return enrichIssuerVerification(certificate)
   },
 
   getFilePath(pdfPath) {
@@ -204,6 +227,7 @@ export const certificateService = {
 
     const issuer = await prisma.user.findUnique({ where: { id: issuedByUserId } })
     if (!issuer) throw new AppError('Issuer not found', 404)
+    const issuerIsVerified = await institutionVerificationService.isVerifiedUser(issuer)
 
     const certId = await nextCertificateId()
 
@@ -222,6 +246,7 @@ export const certificateService = {
       issueDate:           new Date(issueDate),
       certificateId:       certId,
       issuerWalletAddress: issuer.walletAddress || null,
+      issuerIsVerified,
       qrBuffer,
     })
 
@@ -264,7 +289,7 @@ export const certificateService = {
     })
 
     return {
-      certificate,
+      certificate: await enrichIssuerVerification(certificate),
       blockchainPayload: {
         credentialIdBytes32:   encodeId(certId),
         credentialHashBytes32: encodeHash(pdfHash),
@@ -299,7 +324,7 @@ export const certificateService = {
       }
     }
 
-    return prisma.certificate.update({
+    const certificate = await prisma.certificate.update({
       where: { certificateId },
       data: {
         status:              'ACTIVE',
@@ -310,5 +335,6 @@ export const certificateService = {
       },
       select: CERT_SELECT,
     })
+    return enrichIssuerVerification(certificate)
   },
 }

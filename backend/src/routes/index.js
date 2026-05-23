@@ -4,6 +4,7 @@ import authRoutes        from './authRoutes.js'
 import userRoutes        from './userRoutes.js'
 import holderRoutes      from './holderRoutes.js'
 import universityRoutes  from './universityRoutes.js'
+import institutionVerificationRoutes from './institutionVerificationRoutes.js'
 import certificateRoutes from './certificateRoutes.js'
 import blockchainRoutes  from './blockchainRoutes.js'
 import verifyRoutes      from './verifyRoutes.js'
@@ -27,6 +28,8 @@ console.log('[ROUTES] ✓ /holders mounted')
 
 router.use('/universities', universityRoutes)
 console.log('[ROUTES] ✓ /universities mounted')
+router.use('/institution-verification', institutionVerificationRoutes)
+console.log('[ROUTES] ✓ /institution-verification mounted')
 
 router.use('/certificates', certificateRoutes)
 console.log('[ROUTES] ✓ /certificates mounted')

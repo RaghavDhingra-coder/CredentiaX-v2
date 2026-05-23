@@ -148,6 +148,15 @@ function Row({ label, children }) {
   )
 }
 
+function issuerIsVerified(cert) {
+  const approvedWallet = cert?.issuedByUser?.walletAddress?.toLowerCase()
+  const certificateWallet = cert?.issuerWalletAddress?.toLowerCase()
+  return cert?.issuedByUser?.verificationStatus === 'VERIFIED'
+    && approvedWallet
+    && certificateWallet
+    && approvedWallet === certificateWallet
+}
+
 // ─── Status configs ───────────────────────────────────────────────────────────
 
 const STATUS_CONFIG = {
@@ -245,7 +254,20 @@ function ResultCard({ result, mode, onReset }) {
           <Row label="Course">{cert.course}</Row>
           {cert.description && <Row label="Description">{cert.description}</Row>}
           <Row label="Holder">{cert.holder?.name} <span className="text-slate-500">({cert.holder?.email})</span></Row>
-          <Row label="Issued by">{cert.issuedByUser?.name}</Row>
+          <Row label="Issued by">
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              {cert.issuedByUser?.name}
+              {issuerIsVerified(cert) ? (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  Verified Institution
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  Unverified Institution
+                </span>
+              )}
+            </span>
+          </Row>
           <Row label="Issue Date">
             {new Date(cert.issueDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
           </Row>
