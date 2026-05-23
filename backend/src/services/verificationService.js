@@ -3,6 +3,7 @@ import { extractFromFile, scanQRFromBuffer, parseCertIdFromQR } from './extractS
 import { geminiExtractFields } from './geminiExtractService.js'
 import { verificationLogService } from './verificationLogService.js'
 import { normalize } from '../utils/certMetadata.js'
+import { institutionVerificationService } from './institutionVerificationService.js'
 
 const CERT_SELECT = {
   id:                  true,
@@ -22,7 +23,12 @@ const CERT_SELECT = {
   blockNumber:         true,
   createdAt:           true,
   holder:       { select: { id: true, name: true, email: true, walletAddress: true } },
-  issuedByUser: { select: { id: true, name: true, email: true } },
+  issuedByUser: { select: {
+    id: true,
+    name: true,
+    email: true,
+    walletAddress: true,
+  } },
 }
 
 const LOG_STATUS = { VALID: 'VALID', TAMPERED: 'INVALID', REVOKED: 'REVOKED' }
@@ -175,6 +181,7 @@ export const verificationService = {
     })
 
     if (!cert) return notFound(extractionMethod, qrFound)
+    cert.issuedByUser = await institutionVerificationService.enrichUser(cert.issuedByUser)
 
     if (cert.isRevoked) {
       await safeLog(cert.id, ip, 'REVOKED')

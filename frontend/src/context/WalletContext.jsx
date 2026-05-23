@@ -151,6 +151,30 @@ export function WalletProvider({ children }) {
     }
   }, [isInstalled, switchToAmoy])
 
+  const switchAccount = useCallback(async () => {
+    if (!isInstalled) return
+    try {
+      await window.ethereum.request({
+        method: 'wallet_requestPermissions',
+        params: [{ eth_accounts: {} }],
+      })
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' })
+      if (accounts.length > 0) {
+        const addr = accounts[0]
+        const p = new BrowserProvider(window.ethereum)
+        setProvider(p)
+        const net = await p.getNetwork()
+        updateNetwork(net.chainId)
+        setAddress(addr)
+        localStorage.setItem('cx_wallet', addr)
+        await api.patch('/auth/wallet', { walletAddress: addr })
+        toast.success('Wallet switched')
+      }
+    } catch (err) {
+      if (err.code !== 4001) toast.error(err.response?.data?.message || 'Failed to switch wallet')
+    }
+  }, [isInstalled])
+
   const disconnect = useCallback(async () => {
     setAddress(null)
     setProvider(null)
@@ -171,7 +195,7 @@ export function WalletProvider({ children }) {
   }, [provider])
 
   return (
-    <WalletContext.Provider value={{ address, network, isCorrectNetwork, connecting, provider, isInstalled, connect, disconnect, switchToAmoy, getSigner }}>
+    <WalletContext.Provider value={{ address, network, isCorrectNetwork, connecting, provider, isInstalled, connect, disconnect, switchAccount, switchToAmoy, getSigner }}>
       {children}
     </WalletContext.Provider>
   )

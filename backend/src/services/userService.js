@@ -18,23 +18,17 @@ export const userService = {
 
   async findAll({ page = 1, limit = 20 } = {}) {
     const skip = (page - 1) * limit
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          walletAddress: true,
-          createdAt: true,
-        },
-      }),
+    const [rows, total] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT id, name, email, role::text AS role, "walletAddress",
+               "verificationStatus"::text AS "verificationStatus", "createdAt"
+        FROM users
+        ORDER BY "createdAt" DESC
+        LIMIT ${limit} OFFSET ${skip}
+      `,
       prisma.user.count(),
     ])
-    return { users, total, page, limit }
+    return { users: rows, total, page, limit }
   },
 
   async findById(id) {
