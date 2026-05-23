@@ -148,6 +148,17 @@ export const institutionVerificationService = {
     return requestDetails(userId)
   },
 
+  async setPendingOnRegistration(userId) {
+    if (!await storageAvailable()) return
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET
+        "verificationStatus" = 'PENDING'::"InstitutionVerificationStatus",
+        "verificationRequestedAt" = NOW()
+      WHERE "id" = ${userId}
+    `
+  },
+
   async findPending() {
     if (!await storageAvailable()) return []
     return prisma.$queryRaw`
@@ -167,6 +178,76 @@ export const institutionVerificationService = {
       WHERE "role" = 'UNIVERSITY'::"Role"
         AND "verificationStatus" = 'PENDING'::"InstitutionVerificationStatus"
       ORDER BY "verificationRequestedAt" ASC
+    `
+  },
+
+  async approveAccess(userId) {
+    await requireStorage()
+    const institution = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    })
+    if (!institution || institution.role !== 'UNIVERSITY') {
+      throw new AppError('Institution not found', 404)
+    }
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET
+        "verificationStatus" = 'VERIFIED'::"InstitutionVerificationStatus",
+        "verificationReviewedAt" = NOW(),
+        "verificationNote" = NULL,
+        "verifiedAt" = NOW()
+      WHERE "id" = ${userId}
+    `
+    return requestDetails(userId)
+  },
+
+  async rejectAccess(userId, note) {
+    await requireStorage()
+    const trimmedNote = String(note || '').trim()
+    if (!trimmedNote) throw new AppError('A rejection note is required', 422)
+    const institution = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    })
+    if (!institution || institution.role !== 'UNIVERSITY') {
+      throw new AppError('Institution not found', 404)
+    }
+    await prisma.$executeRaw`
+      UPDATE "users"
+      SET
+        "verificationStatus" = 'REJECTED'::"InstitutionVerificationStatus",
+        "verificationReviewedAt" = NOW(),
+        "verificationNote" = ${trimmedNote},
+        "verifiedAt" = NULL
+      WHERE "id" = ${userId}
+    `
+    return requestDetails(userId)
+  },
+
+  async findAllInstitutions() {
+    if (!await storageAvailable()) {
+      return prisma.user.findMany({
+        where: { role: 'UNIVERSITY' },
+        select: { id: true, name: true, email: true, walletAddress: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
+    return prisma.$queryRaw`
+      SELECT
+        "id",
+        "name",
+        "email",
+        "walletAddress",
+        "createdAt",
+        "verificationStatus"::text AS "verificationStatus",
+        "verificationRequestedAt",
+        "verificationReviewedAt",
+        "verificationNote",
+        "verifiedAt"
+      FROM "users"
+      WHERE "role" = 'UNIVERSITY'::"Role"
+      ORDER BY "createdAt" DESC
     `
   },
 

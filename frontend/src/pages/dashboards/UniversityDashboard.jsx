@@ -757,6 +757,89 @@ function IssueCertificateModal({ holders, onClose, onIssued }) {
   )
 }
 
+// ── Pending Approval Screen ──────────────────────────────────────────────────
+
+function PendingApprovalScreen({ status, note }) {
+  const isRejected = status === 'REJECTED'
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        {/* Animated icon */}
+        <div className="flex justify-center mb-8">
+          <div className="relative">
+            <div className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl ${
+              isRejected
+                ? 'bg-red-500/10 border border-red-500/20 shadow-red-500/10'
+                : 'bg-amber-500/10 border border-amber-500/20 shadow-amber-500/10'
+            }`}>
+              {isRejected ? (
+                <svg className="w-12 h-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-12 h-12 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
+            </div>
+            {!isRejected && (
+              <span className="absolute inset-0 rounded-full animate-ping opacity-20 bg-amber-400" />
+            )}
+          </div>
+        </div>
+
+        {/* Card */}
+        <div className="bg-slate-900 border border-slate-700/60 rounded-2xl p-8 text-center shadow-2xl shadow-black/60">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-4 ${
+            isRejected
+              ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+              : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isRejected ? 'bg-red-400' : 'bg-amber-400 animate-pulse'}`} />
+            {isRejected ? 'Registration Rejected' : 'Approval Pending'}
+          </div>
+
+          <h1 className="text-xl font-bold text-white mb-3">
+            {isRejected ? 'Account Not Approved' : 'Awaiting Admin Approval'}
+          </h1>
+
+          <p className="text-slate-400 text-sm leading-relaxed mb-6">
+            {isRejected
+              ? 'Your institution registration was not approved. Please contact the platform administrator for more information.'
+              : 'Your institution account is awaiting admin approval.\nYou will gain full access after verification.'}
+          </p>
+
+          {isRejected && note && (
+            <div className="mb-6 px-4 py-3 rounded-xl bg-red-500/8 border border-red-500/20 text-left">
+              <p className="text-xs text-slate-500 mb-1">Admin note</p>
+              <p className="text-sm text-red-300">{note}</p>
+            </div>
+          )}
+
+          {!isRejected && (
+            <div className="flex flex-col gap-3 mb-6">
+              {[
+                { icon: '🏛️', text: 'Your institution details are under review' },
+                { icon: '✉️', text: 'You will be notified once approved' },
+                { icon: '🔒', text: 'Dashboard features unlock automatically' },
+              ].map(({ icon, text }) => (
+                <div key={text} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700/40 text-left">
+                  <span className="text-lg shrink-0">{icon}</span>
+                  <p className="text-xs text-slate-400">{text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-slate-600">
+            Questions? Contact <span className="text-slate-400">admin@credentiax.io</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Dashboard ───────────────────────────────────────────────────────────
 
 function truncateAddress(addr) {
@@ -784,8 +867,8 @@ export default function UniversityDashboard() {
     try {
       const { data } = await api.get('/holders')
       setHolders(data.data.holders)
-    } catch {
-      toast.error('Failed to load holders')
+    } catch (err) {
+      if (err.response?.status !== 403) toast.error('Failed to load holders')
     } finally {
       setLoadingH(false)
     }
@@ -811,6 +894,12 @@ export default function UniversityDashboard() {
       note: user?.verificationNote || '',
     })
   }, [user])
+
+  // Block unapproved institutions before rendering the full dashboard
+  const isApproved = verification.status === 'VERIFIED'
+  if (!isApproved) {
+    return <PendingApprovalScreen status={verification.status} note={verification.note} />
+  }
 
   async function requestVerification() {
     setRequestingVerification(true)

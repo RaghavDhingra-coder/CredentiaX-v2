@@ -167,10 +167,27 @@ function AdminPanel({ type, data, loading, onClose }) {
   )
 }
 
+// ─── Institution status badge ──────────────────────────────────────────────────
+const STATUS_CFG = {
+  VERIFIED:   { label: 'Approved',  dot: 'bg-emerald-400', text: 'text-emerald-400', ring: 'bg-emerald-500/10 border-emerald-500/20' },
+  PENDING:    { label: 'Pending',   dot: 'bg-amber-400 animate-pulse', text: 'text-amber-400', ring: 'bg-amber-500/10 border-amber-500/20' },
+  REJECTED:   { label: 'Rejected',  dot: 'bg-red-400',     text: 'text-red-400',     ring: 'bg-red-500/10 border-red-500/20' },
+  UNVERIFIED: { label: 'Pending',   dot: 'bg-amber-400 animate-pulse', text: 'text-amber-400', ring: 'bg-amber-500/10 border-amber-500/20' },
+}
+
+function StatusBadge({ status }) {
+  const cfg = STATUS_CFG[status] ?? STATUS_CFG.UNVERIFIED
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${cfg.ring} ${cfg.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 const adminActions = [
   { label: 'Manage Users',        desc: 'View, edit, or remove user accounts',  color: 'indigo', type: 'users'        },
-  { label: 'Manage Universities', desc: 'Verify or suspend institutions',         color: 'sky',    type: 'universities' },
   { label: 'Audit Logs',          desc: 'View all system activity',               color: 'violet', type: 'audit'        },
   { label: 'System Settings',     desc: 'Configure platform parameters',          color: 'slate',  type: 'settings'     },
 ]
@@ -186,11 +203,12 @@ export default function AdminDashboard() {
   const { user } = useAuth()
   const [stats,   setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
-  const [verificationRequests, setVerificationRequests] = useState([])
-  const [loadingRequests, setLoadingRequests] = useState(true)
-  const [reviewNotes, setReviewNotes] = useState({})
-  const [reviewingId, setReviewingId] = useState(null)
-  const [activePanel, setActivePanel] = useState(null) // 'users' | 'universities' | null
+  const [institutions, setInstitutions] = useState([])
+  const [loadingInstitutions, setLoadingInstitutions] = useState(true)
+  const [rejectNotes, setRejectNotes]   = useState({})
+  const [actionId, setActionId]         = useState(null)
+  const [expandedReject, setExpandedReject] = useState(null)
+  const [activePanel, setActivePanel] = useState(null)
   const [panelData, setPanelData]     = useState([])
   const [panelLoading, setPanelLoading] = useState(false)
 
@@ -201,14 +219,15 @@ export default function AdminDashboard() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { fetchStats() }, [])
-
-  useEffect(() => {
-    api.get('/institution-verification/requests')
-      .then(({ data }) => setVerificationRequests(data.data.requests))
+  function fetchInstitutions() {
+    api.get('/admin/institutions')
+      .then(({ data }) => setInstitutions(data.data.institutions))
       .catch(() => {})
-      .finally(() => setLoadingRequests(false))
-  }, [])
+      .finally(() => setLoadingInstitutions(false))
+  }
+
+  useEffect(() => { fetchStats() }, [])
+  useEffect(() => { fetchInstitutions() }, [])
 
   async function openPanel(type) {
     if (type === 'audit' || type === 'settings') {
@@ -220,8 +239,7 @@ export default function AdminDashboard() {
     setPanelData([])
     try {
       const { data } = await api.get('/users')
-      const all = data.data.users
-      setPanelData(type === 'universities' ? all.filter((u) => u.role === 'UNIVERSITY') : all)
+      setPanelData(data.data.users)
     } catch {
       toast.error('Failed to load data')
     } finally {
@@ -229,22 +247,37 @@ export default function AdminDashboard() {
     }
   }
 
-  async function reviewVerification(request, decision) {
-    setReviewingId(request.id)
+  async function approveInstitution(inst) {
+    setActionId(inst.id)
     try {
-      await api.patch(`/institution-verification/requests/${request.id}`, {
-        decision,
-        note: reviewNotes[request.id] || '',
-      })
-      setVerificationRequests((prev) => prev.filter((item) => item.id !== request.id))
-      toast.success(decision === 'APPROVE' ? 'Institution verified' : 'Verification request rejected')
+      await api.patch(`/admin/approve-institution/${inst.id}`)
+      setInstitutions((prev) => prev.map((i) => i.id === inst.id ? { ...i, verificationStatus: 'VERIFIED', verificationReviewedAt: new Date().toISOString() } : i))
+      toast.success(`${inst.name} approved`)
       fetchStats()
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not review verification request')
+      toast.error(err.response?.data?.message || 'Could not approve institution')
     } finally {
-      setReviewingId(null)
+      setActionId(null)
     }
   }
+
+  async function rejectInstitution(inst) {
+    const note = rejectNotes[inst.id] || ''
+    if (!note.trim()) { toast.error('Rejection note is required'); return }
+    setActionId(inst.id)
+    try {
+      await api.patch(`/admin/reject-institution/${inst.id}`, { note })
+      setInstitutions((prev) => prev.map((i) => i.id === inst.id ? { ...i, verificationStatus: 'REJECTED', verificationReviewedAt: new Date().toISOString() } : i))
+      setExpandedReject(null)
+      toast.success(`${inst.name} rejected`)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not reject institution')
+    } finally {
+      setActionId(null)
+    }
+  }
+
+  const pendingCount = institutions.filter((i) => ['PENDING', 'UNVERIFIED'].includes(i.verificationStatus ?? 'UNVERIFIED')).length
 
   const s = stats ?? {}
   const gridColor    = '#1e293b'
@@ -325,66 +358,142 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            {/* ── Institution Access Control ──────────────────────────────── */}
             <div className="bg-slate-900 border border-slate-700/60 rounded-2xl overflow-hidden">
               <div className="px-5 sm:px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold text-white text-sm sm:text-base">Verification Requests</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Approve reviewed institution wallets</p>
+                  <h2 className="font-semibold text-white text-sm sm:text-base">Institution Approvals</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">Manage institution access to the platform</p>
                 </div>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400">
-                  {verificationRequests.length} pending
-                </span>
+                {pendingCount > 0 && (
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 font-medium">
+                    {pendingCount} pending
+                  </span>
+                )}
               </div>
-              {loadingRequests ? (
+
+              {loadingInstitutions ? (
                 <div className="p-5 flex flex-col gap-3">
-                  <Sk className="h-28" />
+                  {[...Array(3)].map((_, i) => <Sk key={i} className="h-16" />)}
                 </div>
-              ) : verificationRequests.length === 0 ? (
-                <div className="px-6 py-8 text-center text-sm text-slate-500">No pending requests</div>
+              ) : institutions.length === 0 ? (
+                <div className="px-6 py-10 text-center text-sm text-slate-500">No institutions registered yet</div>
               ) : (
                 <div className="divide-y divide-slate-800">
-                  {verificationRequests.map((request) => (
-                    <div key={request.id} className="p-5 flex flex-col gap-3">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-white">{request.name}</p>
-                          <p className="text-xs text-slate-500">{request.email}</p>
+                  {institutions.map((inst) => {
+                    const status = inst.verificationStatus ?? 'UNVERIFIED'
+                    const isPending = status === 'PENDING' || status === 'UNVERIFIED'
+                    const isApproved = status === 'VERIFIED'
+                    const busy = actionId === inst.id
+                    const showRejectForm = expandedReject === inst.id
+
+                    return (
+                      <div key={inst.id} className="p-5 flex flex-col gap-3 transition-colors hover:bg-slate-800/20">
+                        {/* Row header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-semibold text-white">{inst.name}</p>
+                              <StatusBadge status={status} />
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">{inst.email}</p>
+                          </div>
+                          <span className="text-xs text-slate-600 shrink-0">
+                            Registered {new Date(inst.createdAt).toLocaleDateString()}
+                          </span>
                         </div>
-                        <span className="text-xs text-slate-500 shrink-0">
-                          {request.verificationRequestedAt ? new Date(request.verificationRequestedAt).toLocaleDateString() : ''}
-                        </span>
+
+                        {/* Wallet */}
+                        {inst.walletAddress && (
+                          <div className="text-xs">
+                            <span className="text-slate-500">Wallet: </span>
+                            <span className="font-mono text-slate-400">{inst.walletAddress.slice(0, 10)}…{inst.walletAddress.slice(-6)}</span>
+                          </div>
+                        )}
+
+                        {/* Rejection note display */}
+                        {status === 'REJECTED' && inst.verificationNote && (
+                          <div className="px-3 py-2 rounded-xl bg-red-500/8 border border-red-500/20 text-xs text-red-300">
+                            <span className="text-slate-500">Note: </span>{inst.verificationNote}
+                          </div>
+                        )}
+
+                        {/* Action buttons — only for non-approved */}
+                        {!isApproved && (
+                          <div className="flex flex-col gap-2">
+                            {!showRejectForm ? (
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => approveInstitution(inst)}
+                                  className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  {busy ? (
+                                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                                    </svg>
+                                  )}
+                                  Approve
+                                </button>
+                                {isPending && (
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => setExpandedReject(inst.id)}
+                                    className="flex-1 py-2 rounded-xl border border-red-500/30 bg-red-500/8 hover:bg-red-500/15 disabled:opacity-50 text-red-300 text-xs font-semibold transition-all"
+                                  >
+                                    Reject
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-2">
+                                <textarea
+                                  value={rejectNotes[inst.id] || ''}
+                                  onChange={(e) => setRejectNotes((prev) => ({ ...prev, [inst.id]: e.target.value }))}
+                                  rows={2}
+                                  placeholder="Reason for rejection (required)"
+                                  className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-red-500/30 text-white placeholder-slate-500 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => rejectInstitution(inst)}
+                                    className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
+                                  >
+                                    {busy && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                                    Confirm Reject
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedReject(null)}
+                                    className="flex-1 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-white text-xs font-medium transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Approved checkmark */}
+                        {isApproved && (
+                          <div className="flex items-center gap-2 text-xs text-emerald-500">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Approved{inst.verificationReviewedAt ? ` on ${new Date(inst.verificationReviewedAt).toLocaleDateString()}` : ''}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs">
-                        <p className="text-slate-500 mb-0.5">Wallet address</p>
-                        <p className="font-mono text-slate-300 break-all">{request.walletAddress || '—'}</p>
-                      </div>
-                      <textarea
-                        value={reviewNotes[request.id] || ''}
-                        onChange={(e) => setReviewNotes((prev) => ({ ...prev, [request.id]: e.target.value }))}
-                        rows={2}
-                        placeholder="Rejection note"
-                        className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={reviewingId === request.id}
-                          onClick={() => reviewVerification(request, 'APPROVE')}
-                          className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          disabled={reviewingId === request.id}
-                          onClick={() => reviewVerification(request, 'REJECT')}
-                          className="flex-1 py-2 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-300 text-xs font-semibold transition-colors"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

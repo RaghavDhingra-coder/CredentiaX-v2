@@ -1,4 +1,5 @@
 import { authService } from '../services/authService.js'
+import { institutionVerificationService } from '../services/institutionVerificationService.js'
 import { errorResponse } from '../utils/response.js'
 
 const COOKIE_NAME = 'credentiax_token'
@@ -46,4 +47,17 @@ export function requireRole(...roles) {
 export function protectRoute(...roles) {
   console.log('[AUTH] protectRoute called with roles:', roles)
   return [verifyToken, ...(roles.length ? [requireRole(...roles)] : [])]
+}
+
+// Blocks UNIVERSITY users whose account has not been approved by an admin
+export async function checkInstitutionApproval(req, res, next) {
+  try {
+    const enriched = await institutionVerificationService.enrichUser({ id: req.user.id })
+    if (enriched.verificationStatus !== 'VERIFIED') {
+      return errorResponse(res, 'Institution approval pending from admin', 403)
+    }
+    next()
+  } catch (err) {
+    next(err)
+  }
 }

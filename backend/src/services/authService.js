@@ -31,8 +31,13 @@ export const authService = {
       select: SAFE_USER_SELECT,
     })
 
+    // New institutions start in PENDING state so admin can approve before granting access
+    if (role === 'UNIVERSITY') {
+      await institutionVerificationService.setPendingOnRegistration(user.id)
+    }
+
     const token = signToken({ id: user.id, role: user.role })
-    return { user, token }
+    return { user: await institutionVerificationService.enrichUser(user), token }
   },
 
   async login({ email, password }) {

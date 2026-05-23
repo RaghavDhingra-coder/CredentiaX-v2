@@ -9,6 +9,7 @@ import certificateRoutes from './certificateRoutes.js'
 import blockchainRoutes  from './blockchainRoutes.js'
 import verifyRoutes      from './verifyRoutes.js'
 import analyticsRoutes   from './analyticsRoutes.js'
+import adminRoutes       from './adminRoutes.js'
 
 const router = Router()
 
@@ -42,6 +43,9 @@ console.log('[ROUTES] ✓ /verify mounted')
 
 router.use('/analytics',    analyticsRoutes)
 console.log('[ROUTES] ✓ /analytics mounted')
+
+router.use('/admin',        adminRoutes)
+console.log('[ROUTES] ✓ /admin mounted')
 
 // 404 for unmatched API routes
 router.use((req, res) => {

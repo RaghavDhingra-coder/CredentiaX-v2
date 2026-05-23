@@ -130,12 +130,7 @@ function Row({ label, children }) {
 }
 
 function issuerIsVerified(cert) {
-  const approvedWallet = cert?.issuedByUser?.walletAddress?.toLowerCase()
-  const certificateWallet = cert?.issuerWalletAddress?.toLowerCase()
   return cert?.issuedByUser?.verificationStatus === 'VERIFIED'
-    && approvedWallet
-    && certificateWallet
-    && approvedWallet === certificateWallet
 }
 
 // ─── Status configs ───────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { certificateController } from '../controllers/certificateController.js'
-import { protectRoute } from '../middleware/auth.js'
+import { protectRoute, checkInstitutionApproval } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -14,14 +14,14 @@ router.get('/test', (req, res) => {
 console.log('[CERT-ROUTES] ✓ GET /test registered')
 
 // UNIVERSITY: issue a new certificate (legacy single-step, off-chain fallback)
-router.post('/issue', ...protectRoute('UNIVERSITY'), certificateController.issue)
+router.post('/issue', ...protectRoute('UNIVERSITY'), checkInstitutionApproval, certificateController.issue)
 console.log('[CERT-ROUTES] ✓ POST /issue registered')
 
 // UNIVERSITY: two-phase decentralized issuance
-router.post('/prepare-issuance',  ...protectRoute('UNIVERSITY'), certificateController.prepareIssuance)
+router.post('/prepare-issuance',  ...protectRoute('UNIVERSITY'), checkInstitutionApproval, certificateController.prepareIssuance)
 console.log('[CERT-ROUTES] ✓ POST /prepare-issuance registered')
 
-router.post('/finalize-issuance', ...protectRoute('UNIVERSITY'), certificateController.finalizeIssuance)
+router.post('/finalize-issuance', ...protectRoute('UNIVERSITY'), checkInstitutionApproval, certificateController.finalizeIssuance)
 console.log('[CERT-ROUTES] ✓ POST /finalize-issuance registered')
 
 // HOLDER: view their own certificates
@@ -29,7 +29,7 @@ router.get('/my-certificates', ...protectRoute('HOLDER'), certificateController.
 console.log('[CERT-ROUTES] ✓ GET /my-certificates registered')
 
 // UNIVERSITY: view certificates they issued
-router.get('/issued', ...protectRoute('UNIVERSITY'), certificateController.issuedCertificates)
+router.get('/issued', ...protectRoute('UNIVERSITY'), checkInstitutionApproval, certificateController.issuedCertificates)
 console.log('[CERT-ROUTES] ✓ GET /issued registered')
 
 // Authenticated: secure PDF download
